@@ -15,7 +15,7 @@
 <style>
 :root{
   --bg:#E9ECE6; --surface:#F6F7F3; --ink:#1E2422; --muted:#5E6762; --line:#CBD1CA;
-  --run:#2F55A4; --bike:#1F7A68; --lift:#B4721A; --rest:#9AA39E;
+  --run:#2F55A4; --bike:#1F7A68; --swim:#2B86B5; --lift:#B4721A; --rest:#9AA39E;
   --display:"Avenir Next Condensed","DIN Condensed","Arial Narrow",sans-serif;
   --body:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
   color-scheme:light;
@@ -25,7 +25,7 @@
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#151A1D; --surface:#1E2529; --ink:#E4E8E3; --muted:#9AA49F; --line:#313A3F;
-    --run:#86A3E6; --bike:#5CC0A8; --lift:#E0A44E; --rest:#5E6762;
+    --run:#86A3E6; --bike:#5CC0A8; --swim:#6CC3E8; --lift:#E0A44E; --rest:#5E6762;
     color-scheme:dark;
   }
 }
@@ -98,11 +98,16 @@ label.field input,label.field select{background:var(--bg);border:1px solid var(-
 .bars{display:flex;align-items:flex-end;gap:3px;height:44px}
 .bar-run{width:7px;border-radius:2px;background:var(--run)}
 .bar-run.race{background:var(--lift)}
+.bar-run.bike{background:var(--bike)} .bar-run.swim{background:var(--swim)}
 .bar-lift{width:7px;height:10px;border-radius:2px;background:var(--lift)}
 .bar-rest{background:var(--rest);height:4px;width:4px;border-radius:2px}
 .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:0 0 14px}
 .legend span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
-.legend .l-run::before{background:var(--run)} .legend .l-lift::before{background:var(--lift)}
+.legend .l-run::before{background:var(--run)} .legend .l-lift::before{background:var(--lift)} .legend .l-bike::before{background:var(--bike)} .legend .l-swim::before{background:var(--swim)}
+.issues{margin:6px 0 0;padding-left:18px;font-size:14px}
+.issues li{margin:4px 0}
+.filebtn{display:block;text-align:center;border:1px dashed var(--line);border-radius:10px;padding:16px;cursor:pointer;background:var(--bg);font-weight:600}
+.filebtn input{display:none}
 details.day{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:0 0 10px;overflow:hidden}
 details.day.is-today{border:2px solid var(--ink)}
 details.day summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:center;gap:12px}
@@ -112,10 +117,10 @@ details.day summary::-webkit-details-marker{display:none}
 .sumline{font-size:14px;color:var(--muted)}
 .dots{margin-left:auto;display:flex;gap:4px}
 .dot{width:9px;height:9px;border-radius:50%}
-.dot.run{background:var(--run)} .dot.lift{background:var(--lift)}
+.dot.run{background:var(--run)} .dot.lift{background:var(--lift)} .dot.bike{background:var(--bike)} .dot.swim{background:var(--swim)} .dot.other{background:var(--rest)}
 .daybody{padding:0 14px 14px}
 .item{border-left:3px solid var(--rest);padding:2px 0 2px 12px;margin:12px 0}
-.item.run{border-color:var(--run)} .item.lift{border-color:var(--lift)}
+.item.run{border-color:var(--run)} .item.lift{border-color:var(--lift)} .item.bike{border-color:var(--bike)} .item.swim{border-color:var(--swim)}
 .item h3{font-size:16px;margin:0 0 2px}
 .item p{margin:0;font-size:15px}
 .notes summary{cursor:pointer;font-weight:600;list-style:none}
@@ -175,7 +180,8 @@ const DEFAULTS = {
   days:null, longDay:'Sat', qualityDay:'Tue',
   strength:null, equipment:null,
   expert:false, ackTough:false,
-  lthr:'', lthrSource:'test', effort:'pace'
+  lthr:'', lthrSource:'test', effort:'pace',
+  mode:'gen', custom:null
 };
 let A = load();
 let idx = 0;
@@ -225,7 +231,9 @@ const SCREENS = [
     render: () => choices('distance', [
       {v:'5K', label:'5K', sub:'3.1 mi'}, {v:'10K', label:'10K', sub:'6.2 mi'},
       {v:'Half', label:'Half marathon', sub:'13.1 mi'}, {v:'Full', label:'Marathon', sub:'26.2 mi'}
-    ], 'two'),
+    ], 'two') + `<div class="card" style="margin-top:16px"><h3>Already have a plan?</h3>
+      <p class="sub">Upload it from a spreadsheet and use this app to follow it, add strength, and export it.</p>
+      <button type="button" class="choice" data-upload="1"><b>Upload my own plan</b><span>Excel or CSV</span></button></div>`,
     check: () => A.distance ? '' : 'Pick a distance to continue.'
   },
   {
@@ -422,6 +430,8 @@ $('screen').addEventListener('click', e => {
     if (v === 'off'){ A.expert = false; if (+A.days < 3 || +A.days > 6) A.days = null; }
     A.ackTough = false; save(); rerender(); return;
   }
+  if (uploadMode){ uploadClick(e); return; }
+  if (e.target.closest('[data-upload]')){ showUpload(); return; }
   if (ackMode){ ackClick(e); return; }
   const c = e.target.closest('.choice');
   if (c){
@@ -436,17 +446,20 @@ $('screen').addEventListener('click', e => {
 });
 $('screen').addEventListener('input', e => {
   const t = e.target;
+  if (uploadMode){ uploadInput(e); return; }
   if (t.dataset.field){ A[t.dataset.field] = t.value; A.ackTough = false; save(); }
   if (t.id === 'ackbox'){ $('next').disabled = !t.checked; return; }
   if (t.dataset.time){ t.value = t.value.replace(/\D/g,''); A[t.dataset.time] = Object.assign({}, A[t.dataset.time], {[t.dataset.part]: t.value}); save(); }
   $('err').textContent = '';
 });
 $('screen').addEventListener('change', e => {
+  if (uploadMode){ if (e.target.type === 'file') handleFile(e.target.files[0]); return; }
   // redraw for fields that change what the screen shows
   if (['raceDate','startDate','benchDist','lthr'].includes(e.target.dataset.field)) rerender();
 });
 
 $('next').addEventListener('click', () => {
+  if (uploadMode){ importUpload(); return; }
   const msg = SCREENS[idx].check();
   if (msg){ $('err').textContent = msg; return; }
   if (idx < SCREENS.length-1){ idx++; render(); window.scrollTo(0,0); }
@@ -461,6 +474,7 @@ $('next').addEventListener('click', () => {
   }
 });
 $('back').addEventListener('click', () => {
+  if (uploadMode){ uploadMode = false; $('next').disabled = false; idx = 0; render(); window.scrollTo(0,0); return; }
   if (ackMode){ ackMode = false; $('next').disabled = false; render(); window.scrollTo(0,0); return; }
   if (idx > 0){ idx--; render(); window.scrollTo(0,0); }
 });
@@ -528,7 +542,7 @@ const LR_PEAK = {
   'Half':{new:10, some:12, regular:13}, 'Full':{new:16, some:18, regular:20}
 };
 const DIST_MI = {'1 mile':1, '5K':3.107, '10K':6.214, 'Half':13.109, 'Full':26.219};
-const PHASE_NAME = {base:'Base', build:'Build', peak:'Peak', taper:'Taper'};
+const PHASE_NAME = {base:'Base', build:'Build', peak:'Peak', taper:'Taper', custom:''};
 const PHASE_NOTE = {
   base:'Building the engine. Mostly easy running, with short fast strides and hills to stay sharp.',
   build:'Quality work ramps up. Hard days are hard, easy days stay truly easy.',
@@ -1034,19 +1048,30 @@ function buildPlan(){
 // ---------- plan view ----------
 let P = null, wk = 0;
 function showPlan(){
-  P = buildPlan();
+  P = A.mode === 'upload' && A.custom ? buildCustomPlan() : buildPlan();
   $('quiz').hidden = true; $('quizbar').hidden = true; $('plan').hidden = false;
   const today = new Date(); today.setHours(0,0,0,0);
   const off = Math.floor((today - parseDate(A.startDate)) / (7 * 864e5));
   wk = Math.min(Math.max(off, 0), P.N - 1);
   drawPlan(); window.scrollTo(0, 0);
 }
-function showQuiz(){
+function showQuiz(where){
   $('plan').hidden = true; $('quiz').hidden = false; $('quizbar').hidden = false;
+  if (where === 'upload'){ showUpload(); window.scrollTo(0, 0); return; }
+  if (where === 'gen'){ A.mode = 'gen'; save(); idx = 0; render(); window.scrollTo(0, 0); return; }
   idx = SCREENS.length - 1; render(); window.scrollTo(0, 0);
 }
 function noteList(){
   const N = P.notes, out = [];
+  if (P.custom){
+    const C = A.custom;
+    out.push(`Imported from ${C.fileName}: ${C.sessions.filter(x => x.sport !== 'Rest').length} sessions over ${C.weeks} weeks.`);
+    if (C.problems.length) out.push(`${C.problems.length} row${C.problems.length > 1 ? 's were' : ' was'} skipped when importing. Upload a fixed file to bring ${C.problems.length > 1 ? 'them' : 'it'} back.`);
+    C.placement.slice(0, 10).forEach(t => out.push(t));
+    if (C.placement.length > 10) out.push(`…and ${C.placement.length - 10} more scheduling notes.`);
+    out.push('Not medical advice. Listen to your body and adjust.');
+    return out;
+  }
   if (A.expert) return ['Expert mode is on: volume, distance and time safety checks are off.', 'Not medical advice. Listen to your body and adjust.'];
   if (+A.days === 3) out.push('On 3 run days, the long run is a big share of your week. A 4th short, easy run would make the plan easier on your body.');
   if (N.floor) out.push(`Week 1 starts at about ${fmtDist(N.floor)}, a bit above your recent volume, because this plan needs a minimum base.`);
@@ -1075,53 +1100,62 @@ function drawPlan(){
   const today = new Date(); today.setHours(0,0,0,0);
   const first = W.days[0].date, last = W.days[6].date;
   const fmt = d => d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
-  const maxMi = Math.max(...P.weeks.flatMap(w => w.days.map(d => d.miles)), 1);
+  const loadOf = d => d.load !== undefined ? d.load : d.miles;
+  const maxMi = Math.max(...P.weeks.flatMap(w => w.days.map(loadOf)), 1);
   const notes = noteList();
   const strip = W.days.map((d, i) => {
-    const h = d.miles ? Math.max(8, Math.round(44 * d.miles / maxMi)) : 0;
+    const ld = loadOf(d), h = ld ? Math.max(8, Math.round(44 * ld / maxMi)) : 0;
     const isToday = +d.date === +today;
+    const sc = d.role === 'RACE' ? 'race' : (SPORT_CLS[d.sport] || '');
     return `<a href="#d${i}" class="${isToday ? 'is-today' : ''}"><span class="bars">
-      ${d.miles ? `<span class="bar-run ${d.role === 'RACE' ? 'race' : ''}" style="height:${h}px"></span>` : ''}
-      ${d.lift ? '<span class="bar-lift"></span>' : ''}${!d.miles && !d.lift ? '<span class="bar-rest"></span>' : ''}
+      ${ld ? `<span class="bar-run ${sc}" style="height:${h}px"></span>` : ''}
+      ${d.lift ? '<span class="bar-lift"></span>' : ''}${!ld && !d.lift ? '<span class="bar-rest"></span>' : ''}
       </span>${DAYS[(d.date.getDay() + 6) % 7].slice(0,2)}</a>`;
   }).join('');
   const cards = W.days.map((d, i) => {
     const isToday = +d.date === +today;
-    const sum = [d.miles ? fmtDist(d.miles) : '', d.lift ? 'Strength' : ''].filter(Boolean).join(' · ') || 'Rest day';
+    const items = dayItems(d);
+    const sum = items.length ? items.map(it => it.sport === 'Strength' ? 'Strength' : (it.sub || it.sport)).join(' · ') : 'Rest day';
+    const head = items.length ? items.filter(it => it.sport !== 'Strength').map(it => it.title).join(' + ') || items[0].title : 'Rest';
     return `<details class="day ${isToday ? 'is-today' : ''}" id="d${i}" ${isToday ? 'open' : ''}>
       <summary><span class="dnum">${d.date.getDate()}</span>
-        <span><span class="dn">${DAYS[(d.date.getDay() + 6) % 7]} · ${esc(d.title)}</span><br><span class="sumline">${sum}</span></span>
-        <span class="dots">${d.miles ? '<i class="dot run"></i>' : ''}${d.lift ? '<i class="dot lift"></i>' : ''}</span></summary>
+        <span><span class="dn">${DAYS[(d.date.getDay() + 6) % 7]} · ${esc(head)}</span><br><span class="sumline">${esc(sum)}</span></span>
+        <span class="dots">${items.map(it => `<i class="dot ${it.cls}"></i>`).join('')}</span></summary>
       <div class="daybody">
-        ${d.role !== 'off' || d.miles ? `<div class="item run"><h3>${esc(d.title)}${d.miles ? ' · ' + fmtDist(d.miles) : ''}</h3><p>${esc(d.hint)}</p>${stepList(d.steps)}</div>` : `<div class="item"><p>${esc(d.hint)}</p></div>`}
-        ${d.lift ? `<div class="item lift"><h3>${esc(d.lift)}</h3><p>${esc(liftHint(d.lift))}</p>${stepList(d.liftSteps)}</div>` : ''}
+        ${items.length ? items.map(it => `<div class="item ${it.cls}"><h3>${esc(it.title)}${it.sub && it.sport !== 'Strength' ? ' · ' + esc(it.sub) : ''}</h3>${it.hint ? `<p>${esc(it.hint)}</p>` : ''}${stepList(it.steps)}</div>`).join('')
+          : `<div class="item"><p>${esc(d.hint || HINT.off)}</p></div>`}
       </div></details>`;
   }).join('');
-  const overview = P.weeks.map((w, i) => `<tr class="${i === wk ? 'cur' : ''}"><td><button data-week="${i}">Week ${i+1}</button></td><td>${PHASE_NAME[w.phase]}</td><td>${fmtDist(w.total)}</td></tr>`).join('');
+  const overview = P.weeks.map((w, i) => `<tr class="${i === wk ? 'cur' : ''}"><td><button data-week="${i}">Week ${i+1}</button></td><td>${PHASE_NAME[w.phase] || ''}</td><td>${fmtDist(w.total)}${P.custom ? ' run' : ''}</td></tr>`).join('');
+  const sportsUsed = P.custom ? [...new Set(A.custom.sessions.map(x => SPORT_CLS[x.sport]).filter(c => ['run','bike','swim','lift'].includes(c)))] : null;
   $('plan').innerHTML = `
-    <p class="phase">${PHASE_NAME[W.phase]} phase · ${esc(A.distance)} plan</p>
+    <p class="phase">${P.custom ? esc(planName()) : `${PHASE_NAME[W.phase]} phase · ${esc(A.distance)} plan`}</p>
     <div class="weekrow"><div>
       <p class="weekno">Week ${wk + 1}<small> / ${P.N}</small></p>
-      <p class="dates">${fmt(first)} – ${fmt(last)} · ${fmtDist(W.total)}</p></div>
+      <p class="dates">${fmt(first)} – ${fmt(last)}${W.total ? ' · ' + fmtDist(W.total) + (P.custom ? ' run' : '') : ''}</p></div>
       <div class="nav"><button id="pprev" aria-label="Previous week" ${wk === 0 ? 'disabled' : ''}>‹</button>
       <button id="pnext" aria-label="Next week" ${wk === P.N - 1 ? 'disabled' : ''}>›</button></div></div>
-    <p class="weeknote">${PHASE_NOTE[W.phase]}</p>
+    ${PHASE_NOTE[W.phase] ? `<p class="weeknote">${PHASE_NOTE[W.phase]}</p>` : ''}
     <div class="strip">${strip}</div>
-    <div class="legend"><span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}</div>
+    <div class="legend">${sportsUsed ? sportsUsed.map(c => `<span class="l-${c}">${({run:'Run', bike:'Bike', swim:'Swim', lift:'Strength'})[c]}</span>`).join('') : `<span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}`}</div>
     ${cards}
     ${goalCard()}
     <details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
       <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul>
-      ${(P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}</details>
+      ${!P.custom && (P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}</details>
     <details class="card notes"><summary>All weeks</summary><table class="overview">${overview}</table></details>
     <div class="card" id="missed" style="margin-top:16px">${missedPanel()}</div>
     <div class="card"><h3>Take your plan with you</h3>
       <div class="planbtns" style="margin-top:8px"><button id="xics">Calendar</button><button id="xpdf">PDF</button><button id="xxlsx">Excel</button></div>
       <p class="quiet" style="margin:8px 0 0">Calendar adds sessions from today on as all-day events. PDF opens the print view: choose Save as PDF, or on iPhone tap Share → Print, then Share again to save the PDF.</p></div>
-    <div class="planbtns"><button id="editans">Edit answers</button></div>`;
+    ${P.custom ? `<div class="planbtns"><button id="reupload">Upload a different plan</button><button id="makegen">Build a plan for me</button></div>`
+               : `<div class="planbtns"><button id="editans">Edit answers</button><button id="toupload">Upload my own</button></div>`}`;
   $('pprev').onclick = () => { if (wk > 0){ wk--; drawPlan(); } };
   $('pnext').onclick = () => { if (wk < P.N - 1){ wk++; drawPlan(); } };
-  $('editans').onclick = showQuiz;
+  if ($('editans')) $('editans').onclick = () => showQuiz();
+  if ($('toupload')) $('toupload').onclick = () => showQuiz('upload');
+  if ($('reupload')) $('reupload').onclick = () => showQuiz('upload');
+  if ($('makegen')) $('makegen').onclick = () => showQuiz('gen');
   $('xics').onclick = exportICS; $('xpdf').onclick = exportPDF; $('xxlsx').onclick = exportXLSX;
   $('missed').onclick = missedClick;
   if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
@@ -1151,6 +1185,449 @@ function liftHint(t){
   if (t.includes('maintenance')) return `${eq}. One short session to hold your strength without adding fatigue.`;
   return `${eq}. Moderate effort, finish feeling like you had more in the tank.`;
 }
+
+
+// =====================================================================
+// UPLOAD YOUR OWN PLAN
+// Forgiving: accepts common spellings, blanks bad optional cells with a
+// warning, skips rows missing what we need, and never fails the whole file.
+// =====================================================================
+let uploadMode = false;
+let UP = null;                       // parsed upload awaiting import
+let UPF = {start: nextMonday(), units: 'mi', busy: false, error: ''};
+
+const SPORTS = ['Run', 'Bike', 'Swim', 'Brick', 'Strength', 'Other', 'Rest'];
+const TYPES = ['Easy', 'Quality', 'Tempo', 'Long', 'Recovery', 'Race', 'Rest'];
+const INTENSITIES = ['Easy', 'Moderate', 'Hard'];
+const SYN = {
+  day: {mon:0, monday:0, mo:0, m:0, tue:1, tues:1, tuesday:1, tu:1, wed:2, weds:2, wednesday:2, we:2, w:2, thu:3, thur:3, thurs:3, thursday:3, th:3,
+        fri:4, friday:4, fr:4, f:4, sat:5, saturday:5, sa:5, sun:6, sunday:6, su:6},
+  sport: {run:'Run', running:'Run', jog:'Run', bike:'Bike', ride:'Bike', cycling:'Bike', cycle:'Bike', trainer:'Bike', turbo:'Bike', zwift:'Bike', spin:'Bike',
+          swim:'Swim', swimming:'Swim', pool:'Swim', ows:'Swim', brick:'Brick', strength:'Strength', lift:'Strength', lifting:'Strength', gym:'Strength',
+          weights:'Strength', 'strength training':'Strength', rest:'Rest', off:'Rest', 'day off':'Rest', other:'Other', xt:'Other', 'cross-training':'Other',
+          'cross training':'Other', walk:'Other', hike:'Other', yoga:'Other', mobility:'Other'},
+  type: {easy:'Easy', e:'Easy', aerobic:'Easy', z2:'Easy', endurance:'Easy', 'easy run':'Easy', quality:'Quality', q:'Quality', intervals:'Quality', interval:'Quality',
+         track:'Quality', speed:'Quality', vo2:'Quality', 'vo2 max':'Quality', workout:'Quality', hills:'Quality', fartlek:'Quality', tempo:'Tempo', t:'Tempo',
+         threshold:'Tempo', 'sub-threshold':'Tempo', 'cruise intervals':'Tempo', steady:'Tempo', long:'Long', lr:'Long', 'long run':'Long', 'long ride':'Long',
+         recovery:'Recovery', rec:'Recovery', shakeout:'Recovery', race:'Race', 'race day':'Race', rest:'Rest', off:'Rest'},
+  intensity: {easy:'Easy', e:'Easy', low:'Easy', light:'Easy', moderate:'Moderate', mod:'Moderate', m:'Moderate', medium:'Moderate', med:'Moderate', steady:'Moderate',
+              hard:'Hard', h:'Hard', high:'Hard', 'very hard':'Hard', max:'Hard'}
+};
+const HEAD = {
+  week:['week', 'wk', 'week #', 'week number', 'week no'], day:['day', 'weekday', 'day of week', 'dow'], sport:['sport', 'discipline', 'activity', 'activity type'],
+  type:['type', 'session type', 'workout type', 'category', 'kind'], title:['title', 'workout', 'name', 'session name', 'workout name', 'summary'],
+  details:['details', 'detail', 'description', 'instructions', 'notes', 'note', 'structure'], distance:['distance', 'dist', 'miles', 'mileage', 'km', 'kilometers', 'kilometres', 'mi'],
+  duration:['duration', 'time', 'minutes', 'mins', 'min', 'length'], intensity:['intensity', 'effort', 'zone', 'rpe'],
+  session:['session', 'session name', 'workout', 'day'], exercise:['exercise', 'lift', 'movement', 'exercise name'],
+  sets:['sets × reps', 'sets x reps', 'sets/reps', 'sets and reps', 'prescription', 'sets', 'reps', 'scheme'], load:['load', 'weight', '% 1rm', 'percent', 'rpe']
+};
+const normS = v => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+function headKey(cell, keys){
+  const raw = normS(cell), base = raw.replace(/\s*\(.*\)\s*$/, '').trim();
+  for (const k of keys) if (HEAD[k].includes(raw) || HEAD[k].includes(base)) return k;
+  return null;
+}
+function unitOf(text){ const t = normS(text); return /\bkm\b|kilomet/.test(t) ? 'km' : /\bmi\b|mile/.test(t) ? 'mi' : /\byd|yard/.test(t) ? 'yd' : /\bm\b|meter|metre/.test(t) ? 'm' : null; }
+
+// ---------- reading files ----------
+function readCSV(text){
+  text = text.replace(/^﻿/, '');
+  const first = text.split(/\r?\n/)[0] || '';
+  const delim = [',', ';', '\t'].sort((a, b) => first.split(b).length - first.split(a).length)[0];
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (q){
+      if (c === '"' && text[i + 1] === '"'){ cell += '"'; i++; }
+      else if (c === '"') q = false;
+      else cell += c;
+    } else if (c === '"' && cell === '') q = true;
+    else if (c === delim){ row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r'){
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += c;
+  }
+  if (cell !== '' || row.length){ row.push(cell); rows.push(row); }
+  return rows;
+}
+async function inflateRaw(bytes){
+  if (typeof DecompressionStream === 'undefined') throw new Error('This browser can\'t open .xlsx files. Save the sheet as CSV and upload that instead.');
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function unzip(buf){
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  let e = u8.length - 22;
+  while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if (e < 0) throw new Error('That file doesn\'t look like a real .xlsx file.');
+  const count = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true);
+  const files = {}, dec = new TextDecoder();
+  for (let i = 0; i < count; i++){
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    const name = dec.decode(u8.subarray(p + 46, p + 46 + nlen));
+    const start = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true);
+    files[name] = {method, data: u8.subarray(start, start + csize)};
+    p += 46 + nlen + xlen + clen;
+  }
+  return {
+    async text(name){
+      const f = files[name]; if (!f) return null;
+      return dec.decode(f.method === 8 ? await inflateRaw(f.data) : f.data);
+    }
+  };
+}
+const xmlDoc = t => new DOMParser().parseFromString(t, 'application/xml');
+function colIdx(ref){ const m = /^([A-Z]+)/.exec(ref); let n = 0; for (const ch of m[1]) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; }
+async function readXLSX(buf){
+  const z = await unzip(buf);
+  const wb = xmlDoc(await z.text('xl/workbook.xml') || '');
+  const rels = xmlDoc(await z.text('xl/_rels/workbook.xml.rels') || '');
+  const relMap = {};
+  [...rels.getElementsByTagName('Relationship')].forEach(r => relMap[r.getAttribute('Id')] = r.getAttribute('Target'));
+  const ss = [];
+  const sst = await z.text('xl/sharedStrings.xml');
+  if (sst) [...xmlDoc(sst).getElementsByTagName('si')].forEach(si => ss.push([...si.getElementsByTagName('t')].map(t => t.textContent).join('')));
+  const sheets = {};
+  for (const sh of wb.getElementsByTagName('sheet')){
+    const rid = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    let target = relMap[rid] || ''; target = target.replace(/^\//, '');
+    if (!target.startsWith('xl/')) target = 'xl/' + target;
+    const x = await z.text(target); if (!x) continue;
+    const rows = [];
+    for (const r of xmlDoc(x).getElementsByTagName('row')){
+      const ri = (+r.getAttribute('r') || rows.length + 1) - 1, row = [];
+      for (const c of r.getElementsByTagName('c')){
+        const t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0];
+        let val = '';
+        if (t === 's') val = ss[+(v && v.textContent)] ?? '';
+        else if (t === 'inlineStr') val = [...c.getElementsByTagName('t')].map(n => n.textContent).join('');
+        else if (v) val = t === 'str' || t === 'b' || t === 'e' ? v.textContent : (isNaN(+v.textContent) ? v.textContent : +v.textContent);
+        row[colIdx(c.getAttribute('r') || 'A1')] = val;
+      }
+      rows[ri] = row;
+    }
+    sheets[sh.getAttribute('name')] = rows.map(r => r || []);
+  }
+  return sheets;
+}
+
+// ---------- parsing cells ----------
+function parseNumber(v){
+  if (typeof v === 'number') return {n: v};
+  const t = normS(v); if (!t) return {n: null};
+  const range = /^(\d+(?:\.\d+)?)\s*(?:-|–|to)\s*(\d+(?:\.\d+)?)/.exec(t);
+  if (range) return {n: (+range[1] + +range[2]) / 2, range: true, unit: unitOf(t)};
+  const m = /^(\d+(?:[.,]\d+)?)/.exec(t);
+  if (!m) return {n: null, bad: true};
+  return {n: +m[1].replace(',', '.'), unit: unitOf(t.slice(m[1].length))};
+}
+function parseMinutes(v){
+  if (typeof v === 'number') return v > 0 && v < 1 ? Math.round(v * 1440) : v;   // Excel stores times as fractions of a day
+  const t = normS(v); if (!t) return null;
+  let m = /^(\d+):(\d{2}):(\d{2})$/.exec(t); if (m) return +m[1] * 60 + +m[2] + +m[3] / 60;
+  m = /^(\d+):(\d{2})$/.exec(t); if (m) return +m[1] * 60 + +m[2];
+  m = /^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\b(?:\s*(\d+)\s*(m|min|mins|minutes)?)?/.exec(t); if (m) return +m[1] * 60 + (+m[3] || 0);
+  m = /^(\d+(?:\.\d+)?)\s*(m|min|mins|minutes)?$/.exec(t); if (m) return +m[1];
+  return NaN;
+}
+function mapSyn(kind, v){
+  const t = normS(v); if (!t) return '';
+  if (SYN[kind][t] !== undefined) return SYN[kind][t];
+  const first = t.split(/[ ,/(-]/)[0];
+  return SYN[kind][first] !== undefined ? SYN[kind][first] : null;
+}
+function findHeader(rows, need){
+  for (let i = 0; i < Math.min(rows.length, 15); i++){
+    const keys = (rows[i] || []).map(c => headKey(c, need.all));
+    if (need.req.every(k => keys.includes(k))) return {row: i, keys};
+  }
+  return null;
+}
+
+function parseUpload(sheets, fileName){
+  const problems = [], warnings = [];
+  const names = Object.keys(sheets);
+  const planKeys = ['week','day','sport','type','title','details','distance','duration','intensity'];
+  const strKeys = ['week','session','exercise','sets','load','details'];
+  let planSheet = null, planHead = null, strSheet = null, strHead = null;
+  for (const n of names){
+    const rows = sheets[n];
+    if (!planSheet && !/strength|lift/i.test(n)){ const h = findHeader(rows, {all: planKeys, req: ['week','day']}); if (h){ planSheet = n; planHead = h; continue; } }
+    if (!strSheet){ const h = findHeader(rows, {all: strKeys, req: ['week','exercise']}); if (h){ strSheet = n; strHead = h; } }
+  }
+  if (!planSheet) return {fatal: `We couldn't find a header row with Week and Day columns${names.length > 1 ? ' on any tab' : ''}. Start from the template, or check the column names.`};
+  const rows = sheets[planSheet], H = planHead.keys;
+  const col = k => H.indexOf(k);
+  const headerUnit = col('distance') >= 0 ? unitOf(rows[planHead.row][col('distance')]) : null;
+  if (rows.length - planHead.row > 2500) return {fatal: 'That file has more than 2,500 rows. Trim it to the plan itself and try again.'};
+  const sessions = [];
+  let seenAnything = false;
+  for (let i = planHead.row + 1; i < rows.length; i++){
+    const r = rows[i] || [], rn = i + 1;
+    const get = k => col(k) >= 0 ? r[col(k)] : '';
+    if (!r.some(c => String(c ?? '').trim() !== '')) continue;
+    seenAnything = true;
+    const wRaw = get('week'), wM = /(\d+)/.exec(String(wRaw ?? ''));
+    const week = wM ? +wM[1] : NaN;
+    if (!week || week < 1 || week > 104){ problems.push(`Row ${rn}: Week "${wRaw}" isn't a week number. Row skipped.`); continue; }
+    let day = mapSyn('day', get('day'));
+    if ((day === null || day === '') && /^[1-7]$/.test(String(get('day')).trim())) day = +String(get('day')).trim() - 1;
+    if (day === null || day === ''){ problems.push(`Row ${rn}: Day "${get('day')}" isn't a day of the week. Use Mon–Sun. Row skipped.`); continue; }
+    let sport = mapSyn('sport', get('sport')), type = mapSyn('type', get('type'));
+    if (sport === null){ warnings.push(`Row ${rn}: Sport "${get('sport')}" isn't one we know, so it's listed as Other.`); sport = 'Other'; }
+    if (type === null){ warnings.push(`Row ${rn}: Type "${get('type')}" isn't one we know, so it's treated as Easy.`); type = 'Easy'; }
+    if (!sport) sport = type === 'Rest' ? 'Rest' : 'Run';
+    if (!type) type = sport === 'Rest' ? 'Rest' : sport === 'Strength' ? '' : 'Easy';
+    if (sport === 'Rest') type = 'Rest';
+    let intensity = mapSyn('intensity', get('intensity'));
+    if (intensity === null){
+      const num = +String(get('intensity')).replace(/[^\d.]/g, '');
+      intensity = num ? (num >= 7 ? 'Hard' : num >= 5 ? 'Moderate' : 'Easy') : '';
+      if (!num) warnings.push(`Row ${rn}: Intensity "${get('intensity')}" isn't Easy, Moderate or Hard, so it was left blank.`);
+    }
+    if (!intensity) intensity = ({Quality:'Hard', Tempo:'Hard', Race:'Hard', Long:'Moderate'})[type] || 'Easy';
+    // distance
+    let miles = 0, swimDist = '';
+    const dn = parseNumber(get('distance'));
+    if (dn.bad) warnings.push(`Row ${rn}: Distance "${get('distance')}" isn't a number, so it was left blank.`);
+    else if (dn.n !== null){
+      if (dn.range) warnings.push(`Row ${rn}: Distance "${get('distance')}" is a range, so we used the middle (${dn.n}).`);
+      if (sport === 'Swim'){
+        const u = dn.unit === 'yd' || dn.unit === 'm' ? dn.unit : (UPF.units === 'mi' ? 'yd' : 'm');
+        swimDist = `${Math.round(dn.n)} ${u}`;
+      } else {
+        const u = dn.unit === 'km' || dn.unit === 'mi' ? dn.unit : (headerUnit === 'km' || headerUnit === 'mi' ? headerUnit : UPF.units);
+        miles = u === 'km' ? dn.n / KM : dn.n;
+        if (miles > 200){ warnings.push(`Row ${rn}: ${dn.n} ${u} looks too long for one session, so it was left blank.`); miles = 0; }
+      }
+    }
+    let mins = 0;
+    const dm = parseMinutes(get('duration'));
+    if (Number.isNaN(dm)) warnings.push(`Row ${rn}: Duration "${get('duration')}" isn't a time we can read (try 60, 1:30 or 1h 30m), so it was left blank.`);
+    else if (dm) mins = dm;
+    const title = String(get('title') ?? '').trim() || (sport === 'Strength' ? 'Strength' : sport === 'Rest' ? 'Rest' : `${type} ${sport.toLowerCase()}`.replace(/^Easy run$/, 'Easy run'));
+    const details = String(get('details') ?? '').trim();
+    const steps = details ? details.split(/\s*\|\s*|\r?\n|;\s+/).filter(Boolean) : [];
+    sessions.push({row: rn, week, day, sport, type, intensity, title, steps, miles: Math.round(miles * 10) / 10, mins: Math.round(mins), swimDist});
+  }
+  if (!seenAnything) return {fatal: 'The plan tab has a header row but no sessions under it.'};
+  // strength tab
+  const strength = {};
+  if (strSheet){
+    const R = sheets[strSheet], SH = strHead.keys, sc = k => SH.indexOf(k);
+    for (let i = strHead.row + 1; i < R.length; i++){
+      const r = R[i] || [], rn = i + 1;
+      if (!r.some(c => String(c ?? '').trim() !== '')) continue;
+      const g = k => sc(k) >= 0 ? String(r[sc(k)] ?? '').trim() : '';
+      const wM = /(\d+)/.exec(g('week'));
+      if (!wM){ problems.push(`${strSheet} tab, row ${rn}: Week "${g('week')}" isn't a week number. Row skipped.`); continue; }
+      if (!g('exercise')){ warnings.push(`${strSheet} tab, row ${rn}: no exercise name, so the row was skipped.`); continue; }
+      const sess = g('session') || 'A';
+      const key = `${+wM[1]}|${sess.toLowerCase()}`;
+      (strength[key] = strength[key] || {week: +wM[1], name: sess, lines: []}).lines.push(
+        g('exercise') + ([g('sets'), g('load')].filter(Boolean).length ? ': ' + [g('sets'), g('load')].filter(Boolean).join(' at ') : '') + (g('details') ? ` (${g('details')})` : ''));
+    }
+  }
+  const weeks = Math.max(...sessions.map(x => x.week), 1);
+  const used = new Set(sessions.map(x => x.week));
+  const empty = []; for (let w = 1; w <= weeks; w++) if (!used.has(w)) empty.push(w);
+  if (empty.length) warnings.push(`Week${empty.length > 1 ? 's' : ''} ${empty.join(', ')} ha${empty.length > 1 ? 've' : 's'} no sessions, so ${empty.length > 1 ? 'they' : 'it'} will show as rest.`);
+  const plan = {fileName, weeks, sessions, strength, problems, warnings};
+  plan.placement = placementWarnings(plan);
+  return plan;
+}
+
+// ---------- multisport placement checks (spec: Spreadsheet upload template) ----------
+function placementWarnings(plan){
+  const out = [];
+  const byDay = {};
+  plan.sessions.forEach(x => { if (x.sport !== 'Rest') (byDay[`${x.week}|${x.day}`] = byDay[`${x.week}|${x.day}`] || []).push(x); });
+  const hardEnd = x => !['Strength','Other','Rest'].includes(x.sport) && x.intensity === 'Hard';
+  const keyRun = x => x.sport === 'Run' && (x.type === 'Long' || x.type === 'Quality' || x.type === 'Tempo' || x.type === 'Race');
+  for (let w = 1; w <= plan.weeks; w++){
+    let endurance = 0, strength = 0, minutes = 0, restish = false;
+    for (let d = 0; d < 7; d++){
+      const list = byDay[`${w}|${d}`] || [];
+      const name = `Week ${w} ${DAYS[d]}`;
+      if (list.length > 2) out.push(`${name}: ${list.length} sessions in one day. Two is the usual maximum (a brick counts as one).`);
+      if (list.filter(hardEnd).length >= 2) out.push(`${name}: two hard endurance sessions on the same day. Unless it's a brick, consider splitting them.`);
+      const next = byDay[`${w}|${d + 1}`] || (d === 6 ? byDay[`${w + 1}|0`] || [] : []);
+      if (list.some(x => x.sport === 'Strength') && next.some(keyRun)) out.push(`${name}: strength the day before a ${next.find(keyRun).type.toLowerCase()} run. If it's a heavy leg day, move it earlier.`);
+      if (!list.length || list.every(x => x.intensity === 'Easy' && (x.sport === 'Swim' || x.sport === 'Other'))) restish = true;
+      list.forEach(x => { if (x.sport === 'Strength') strength++; else if (x.sport !== 'Other') endurance++; minutes += x.mins || 0; });
+    }
+    if (!restish) out.push(`Week ${w}: no rest day or easy-swim day. A lighter day helps you absorb the work.`);
+    if ((endurance >= 8 || minutes >= 600) && strength >= 3) out.push(`Week ${w}: a high-volume week with ${strength} strength sessions. Keeping strength to 1–2 short sessions usually works better.`);
+  }
+  return out;
+}
+
+// ---------- upload screen ----------
+function showUpload(){
+  uploadMode = true; UP = null; UPF.error = '';
+  drawUpload();
+}
+function drawUpload(){
+  $('step').textContent = 'Your own plan';
+  $('progress').innerHTML = '';
+  const res = UP && !UP.fatal ? UP : null;
+  const total = res ? res.sessions.filter(x => x.sport !== 'Rest').length : 0;
+  const list = (arr, n = 8) => `<ul class="issues">${arr.slice(0, n).map(t => `<li>${esc(t)}</li>`).join('')}${arr.length > n ? `<li>…and ${arr.length - n} more</li>` : ''}</ul>`;
+  $('screen').innerHTML = `<h1>Upload your plan</h1>
+    <p class="lead">Fill in the template (one row per session), then upload it here. The file stays on your phone.</p>
+    <div class="card"><h3>1. Get the template</h3>
+      <p class="sub">An Excel file with dropdowns for day, sport, type and intensity, a sample plan, and a strength tab.</p>
+      <button type="button" class="choice" data-u="template"><b>Download template</b><span>Opens in Excel, Numbers or Google Sheets</span></button></div>
+    <div class="card"><h3>2. Plan settings</h3>
+      <label class="field">Week 1 starts <input type="date" data-ufield="start" value="${esc(UPF.start)}"></label>
+      <div style="margin-top:10px">${['mi','km'].map(u => `<button type="button" class="choice" data-u="units" data-v="${u}" aria-pressed="${UPF.units === u}" style="display:inline-block;width:48%;margin-right:2%"><b>${u === 'mi' ? 'Miles' : 'Kilometers'}</b></button>`).join('')}</div>
+      <p class="quiet" style="margin:8px 0 0">Distances without a unit are read in ${UPF.units === 'mi' ? 'miles (swims in yards)' : 'kilometers (swims in meters)'}.</p></div>
+    <div class="card"><h3>3. Upload</h3>
+      <label class="filebtn">${UPF.busy ? 'Reading…' : res ? 'Choose a different file' : 'Choose a file (.xlsx or .csv)'}<input type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+      ${UPF.error ? `<p class="flag"><b>Couldn't read that file.</b> ${esc(UPF.error)}</p>` : ''}
+      ${res ? `<p style="margin:12px 0 0;font-size:15px"><b>${esc(res.fileName)}</b>: ${total} session${total === 1 ? '' : 's'} over ${res.weeks} week${res.weeks === 1 ? '' : 's'}${Object.keys(res.strength).length ? `, ${Object.keys(res.strength).length} strength sessions` : ''}.</p>
+        ${res.problems.length ? `<p class="flag"><b>${res.problems.length} row${res.problems.length > 1 ? 's' : ''} skipped</b>${list(res.problems)}</p>` : ''}
+        ${res.warnings.length ? `<p class="flag"><b>${res.warnings.length} cell${res.warnings.length > 1 ? 's' : ''} fixed up</b>${list(res.warnings)}</p>` : ''}
+        ${res.placement.length ? `<p class="flag"><b>${res.placement.length} scheduling note${res.placement.length > 1 ? 's' : ''}</b>${list(res.placement, 6)}</p>` : ''}
+        ${!res.problems.length && !res.warnings.length && !res.placement.length ? '<p class="quiet">Everything looks good.</p>' : '<p class="quiet">You can import now and fix these later, or fix the file and upload it again.</p>'}` : ''}
+    </div>`;
+  $('err').textContent = '';
+  $('back').hidden = false;
+  $('next').textContent = 'Import plan';
+  $('next').disabled = !res || !total;
+}
+function uploadClick(e){
+  const b = e.target.closest('[data-u]'); if (!b) return;
+  if (b.dataset.u === 'template') downloadTemplate();
+  if (b.dataset.u === 'units'){ UPF.units = b.dataset.v; if (UPF.file) handleFile(UPF.file); else drawUpload(); }
+}
+function uploadInput(e){
+  if (e.target.dataset.ufield === 'start') UPF.start = e.target.value;
+}
+let upSeq = 0;
+async function handleFile(file){
+  if (!file) return;
+  const seq = ++upSeq;                               // ignore results from an older file that finishes later
+  UPF.file = file; UPF.busy = true; UPF.error = ''; drawUpload();
+  let parsed = null, error = '';
+  try {
+    const name = file.name || 'plan';
+    let sheets;
+    if (/\.csv$/i.test(name) || file.type === 'text/csv') sheets = {Plan: readCSV(await file.text())};
+    else if (/\.xlsx$/i.test(name)) sheets = await readXLSX(await file.arrayBuffer());
+    else if (/\.xls$/i.test(name) || /\.numbers$/i.test(name)) throw new Error('That format isn\'t supported. Save it as .xlsx or .csv and try again.');
+    else throw new Error('Upload an .xlsx or .csv file.');
+    parsed = parseUpload(sheets, name);
+    if (parsed.fatal){ error = parsed.fatal; parsed = null; }
+  } catch (err){ error = err.message || 'Something went wrong reading the file.'; parsed = null; }
+  if (seq !== upSeq) return;
+  UP = parsed; UPF.error = error; UPF.busy = false; drawUpload();
+}
+function importUpload(){
+  if (!UP) return;
+  if (!UPF.start){ $('err').textContent = 'Pick the date week 1 starts.'; return; }
+  const d = parseDate(UPF.start); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));   // snap to that week's Monday
+  A.mode = 'upload'; A.custom = UP; A.startDate = iso(d); A.units = UPF.units; A.timeline = 'length'; A.built = true;
+  save(); uploadMode = false; $('next').disabled = false; showPlan();
+}
+
+// ---------- template ----------
+function downloadTemplate(){
+  const plan = [['Week', 'Day', 'Sport', 'Type', 'Title', 'Details', 'Distance', 'Duration (min)', 'Intensity'],
+    [1, 'Mon', 'Rest', 'Rest', 'Rest', '', '', '', ''],
+    [1, 'Tue', 'Run', 'Quality', 'Hills', 'Warm up 15 min | 8 × 30 s hill sprints, walk down | Cool down 10 min', 6, '', 'Hard'],
+    [1, 'Tue', 'Strength', '', 'Strength A', 'See the Strength tab', '', 40, 'Moderate'],
+    [1, 'Wed', 'Swim', 'Easy', 'Technique swim', '200 easy | 6 × 50 drill | 200 easy', 1200, 35, 'Easy'],
+    [1, 'Thu', 'Run', 'Tempo', 'Float set', 'Warm up 15 min | 3 × 8 min at threshold, 2 min float | Cool down', 6, '', 'Hard'],
+    [1, 'Thu', 'Strength', '', 'Strength B', 'See the Strength tab', '', 30, 'Moderate'],
+    [1, 'Fri', 'Bike', 'Easy', 'Easy spin', 'Keep it conversational', '', 45, 'Easy'],
+    [1, 'Sat', 'Run', 'Long', 'Long run', 'Easy the whole way | Practice fueling', 10, '', 'Moderate'],
+    [1, 'Sun', 'Bike', 'Long', 'Long ride', 'Steady endurance', 30, 120, 'Moderate'],
+    [2, 'Mon', 'Rest', 'Rest', 'Rest', '', '', '', '']];
+  const strength = [['Week', 'Session', 'Exercise', 'Sets × reps', 'Load', 'Notes'],
+    [1, 'Strength A', 'Trap bar deadlift', '3 × 5', 'RPE 7', 'Main lift'],
+    [1, 'Strength A', 'Bulgarian split squat', '3 × 6/leg', '', ''],
+    [1, 'Strength A', 'Calf raise', '3 × 12', '', 'Slow on the way down'],
+    [1, 'Strength B', 'Goblet squat', '3 × 8', '', ''],
+    [1, 'Strength B', 'Rows', '3 × 10', '', '']];
+  const help = [['How to fill this in'],
+    ['One row per session. Two sessions on one day = two rows with the same Week and Day.'],
+    ['Required: Week (1, 2, 3…) and Day (Mon–Sun). Everything else is optional.'],
+    ['Sport: Run, Bike, Swim, Brick, Strength, Other or Rest. Type: Easy, Quality, Tempo, Long, Recovery, Race or Rest.'],
+    ['Details: separate steps with a | (vertical bar), and each becomes its own line in the app.'],
+    ['Distance: a number. The app asks for miles or km when you upload. Swims are yards or meters (you can write "1500 m").'],
+    ['Duration: minutes (45), or h:mm (1:30).'],
+    ['Strength tab: list exercises by Week and Session. Name the session in the plan tab\'s Title (e.g. "Strength A") to put it on that day.'],
+    ['Strength sessions not placed in the plan tab get placed for you, on hard days and away from your long run.'],
+    ['Delete the sample rows before you start. Not medical advice.']];
+  const dv = [['B2:B2500', DAYS], ['C2:C2500', SPORTS], ['D2:D2500', TYPES], ['I2:I2500', INTENSITIES]];
+  const sheets = [{name:'Plan', rows:plan, widths:[7, 8, 10, 10, 18, 60, 10, 14, 11], dv},
+                  {name:'Strength', rows:strength, widths:[7, 14, 26, 14, 10, 26]},
+                  {name:'How to', rows:help, widths:[110]}];
+  download(xlsxBlob(sheets), 'training-plan-template.xlsx');
+}
+
+// =====================================================================
+// CUSTOM (UPLOADED) PLAN -> the same week/day shape the plan view uses
+// =====================================================================
+const ROLE_OF = {Quality:'Q', Tempo:'T', Long:'L', Easy:'E', Recovery:'R', Race:'RACE', Rest:'off'};
+const SPORT_CLS = {Run:'run', Bike:'bike', Brick:'bike', Swim:'swim', Strength:'lift', Other:'other', Rest:''};
+function sessionLabel(x){
+  if (x.sport === 'Swim' && x.swimDist) return x.swimDist;
+  return [x.miles ? fmtDist(x.miles) : '', x.mins ? `${x.mins} min` : ''].filter(Boolean).join(' · ');
+}
+function buildCustomPlan(){
+  const C = A.custom, start = parseDate(A.startDate);
+  const strengthLeft = {};
+  Object.values(C.strength || {}).forEach(s => (strengthLeft[s.week] = strengthLeft[s.week] || []).push(s));
+  const weeks = [];
+  for (let w = 1; w <= C.weeks; w++){
+    const days = [];
+    for (let j = 0; j < 7; j++){
+      const date = addDays(start, (w - 1) * 7 + j);
+      const list = C.sessions.filter(x => x.week === w && x.day === j && x.sport !== 'Rest');
+      const items = list.map(x => {
+        let steps = x.steps;
+        if (x.sport === 'Strength'){
+          const pool = strengthLeft[w] || [];
+          const k = pool.findIndex(s => normS(s.name) === normS(x.title) || normS(x.title).endsWith(' ' + normS(s.name)));
+          const s = k >= 0 ? pool.splice(k, 1)[0] : null;
+          if (s) steps = s.lines.concat(x.steps.filter(t => !/strength tab/i.test(t)));
+        }
+        return {cls: SPORT_CLS[x.sport] || 'other', sport: x.sport, title: x.title, sub: sessionLabel(x), hint: x.sport === 'Strength' ? '' : `${x.type} · ${x.intensity}`, steps, x};
+      });
+      const main = list.find(x => !['Strength'].includes(x.sport));
+      const runMiles = list.filter(x => x.sport === 'Run').reduce((t, x) => t + x.miles, 0);
+      const load = list.filter(x => x.sport !== 'Strength').reduce((t, x) => t + (x.mins ? x.mins / 9 : x.sport === 'Bike' ? x.miles / 3 : x.sport === 'Swim' ? 3 : x.miles), 0);
+      days.push({date, role: main ? (main.sport === 'Run' ? ROLE_OF[main.type] || 'E' : 'X') : 'off', title: main ? main.title : (list.length ? list[0].title : 'Rest'),
+        miles: runMiles, load, sport: main ? main.sport : '', lift: list.some(x => x.sport === 'Strength') ? 'Strength' : null, items, hint: HINT.off, steps: []});
+    }
+    // Strength from the Strength tab that wasn't placed in the plan tab: hard days first, never the day before a long run, 48 h apart
+    const left = strengthLeft[w] || [];
+    const order = [...days.keys()].sort((a, b) => ({Q:0, T:1, X:2, E:3, off:4, R:5}[days[a].role] ?? 9) - ({Q:0, T:1, X:2, E:3, off:4, R:5}[days[b].role] ?? 9));
+    const usedIdx = days.map((d, i) => d.lift ? i : -1).filter(i => i >= 0);
+    for (const s of left){
+      const i = order.find(i => !['L','RACE'].includes(days[i].role) && !(days[i + 1] && ['L','Q','T','RACE'].includes(days[i + 1].role)) && !usedIdx.some(u => Math.abs(u - i) < 2) && days[i].items.length < 2);
+      if (i === undefined) break;
+      days[i].items.push({cls:'lift', sport:'Strength', title: s.name.length <= 2 ? 'Strength ' + s.name : s.name, sub:'', hint:'Placed for you, away from the day before your long run and hard runs.', steps: s.lines});
+      days[i].lift = 'Strength'; usedIdx.push(i);
+    }
+    const total = days.reduce((t, d) => t + d.miles, 0);
+    weeks.push({phase:'custom', days, total});
+  }
+  return {weeks, notes:{}, N: C.weeks, custom: true};
+}
+// Items to show for a day, for both generated and uploaded plans
+function dayItems(d){
+  if (d.items) return d.items;
+  const out = [];
+  if (d.role !== 'off' || d.miles) out.push({cls:'run', sport:'Run', title: d.title, sub: d.miles ? fmtDist(d.miles) : '', hint: d.hint, steps: d.steps});
+  if (d.lift) out.push({cls:'lift', sport:'Strength', title: d.lift, sub:'', hint: liftHint(d.lift), steps: d.liftSteps});
+  return out;
+}
+function planName(){ return A.mode === 'upload' ? (A.custom && A.custom.fileName ? A.custom.fileName.replace(/\.[^.]+$/, '') : 'My plan') : `${A.distance} training plan`; }
 
 // =====================================================================
 // MISSED TRAINING
@@ -1241,7 +1718,7 @@ const ymd = d => d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + S
 function sessionRows(){
   const rows = [];
   P.weeks.forEach((W, wi) => W.days.forEach(d => {
-    if (!d.miles && !d.lift && d.role === 'off') return;
+    if (!dayItems(d).length) return;
     rows.push({W, wi, d});
   }));
   return rows;
@@ -1261,26 +1738,28 @@ function icsFold(line){
 function exportICS(){
   const today = new Date(); today.setHours(0,0,0,0);
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
-  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Training Block Builder//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEsc(`${A.distance} training plan`)];
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Training Block Builder//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEsc(planName())];
   sessionRows().forEach(({wi, d}, i) => {
     if (d.date < today) return;
-    const summary = [d.miles ? `${d.title} · ${fmtDist(d.miles)}` : '', d.lift ? d.lift : ''].filter(Boolean).join(' + ');
-    const desc = [d.miles ? (d.steps || []).map(x => '• ' + x).join('\n') : '', d.lift ? d.lift + ':\n' + (d.liftSteps || []).map(x => '• ' + x).join('\n') : '', `Week ${wi + 1} of ${P.N}`].filter(Boolean).join('\n\n');
+    const items = dayItems(d);
+    const summary = items.map(it => it.sub && it.sport !== 'Strength' ? `${it.title} · ${it.sub}` : it.title).join(' + ');
+    const desc = items.map(it => [it.title + (it.sub && it.sport !== 'Strength' ? ' · ' + it.sub : '') + ':', ...(it.steps || []).map(x => '• ' + x)].join('\n')).concat([`Week ${wi + 1} of ${P.N}`]).join('\n\n');
     L.push('BEGIN:VEVENT', `UID:tbb-${ymd(d.date)}-${i}@training-block-builder`, 'DTSTAMP:' + stamp,
       'DTSTART;VALUE=DATE:' + ymd(d.date), 'DTEND;VALUE=DATE:' + ymd(addDays(d.date, 1)),
       icsFold('SUMMARY:' + icsEsc(summary)), icsFold('DESCRIPTION:' + icsEsc(desc)), 'TRANSP:TRANSPARENT', 'END:VEVENT');
   });
   L.push('END:VCALENDAR');
-  download(new Blob([L.join('\r\n') + '\r\n'], {type:'text/calendar'}), `${A.distance}-training-plan.ics`);
+  download(new Blob([L.join('\r\n') + '\r\n'], {type:'text/calendar'}), `${planName()}.ics`.replace(/\s+/g, '-'));
 }
 // ---------- PDF (print view) ----------
 function exportPDF(){
   const fmt = d => d.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'});
-  $('print').innerHTML = `<h1>${esc(A.distance)} training plan</h1>
-    <p class="muted">${P.N} weeks · starts ${esc(A.startDate)}${A.timeline === 'race' ? ' · race ' + esc(A.raceDate) : ''} · Not medical advice.</p>` +
-    P.weeks.map((W, wi) => `<h2>Week ${wi + 1}: ${PHASE_NAME[W.phase]} · ${fmtDist(W.total)}</h2><table>
-      ${W.days.map(d => `<tr><td style="width:18%">${fmt(d.date)}</td><td style="width:30%"><b>${esc(d.title)}</b>${d.miles ? ' · ' + fmtDist(d.miles) : ''}${d.lift ? `<br><span class="muted">${esc(d.lift)}</span>` : ''}</td>
-        <td>${(d.steps || []).map(esc).join('<br>')}${d.lift ? `<br><span class="muted">${(d.liftSteps || []).map(esc).join('; ')}</span>` : ''}</td></tr>`).join('')}</table>`).join('');
+  $('print').innerHTML = `<h1>${esc(planName())}</h1>
+    <p class="muted">${P.N} weeks · starts ${esc(A.startDate)}${A.mode !== 'upload' && A.timeline === 'race' ? ' · race ' + esc(A.raceDate) : ''} · Not medical advice.</p>` +
+    P.weeks.map((W, wi) => `<h2>Week ${wi + 1}${PHASE_NAME[W.phase] ? ': ' + PHASE_NAME[W.phase] : ''}${W.total ? ' · ' + fmtDist(W.total) + (P.custom ? ' run' : '') : ''}</h2><table>
+      ${W.days.map(d => { const items = dayItems(d);
+        return `<tr><td style="width:16%">${fmt(d.date)}</td><td style="width:28%">${items.length ? items.map(it => `<b>${esc(it.title)}</b>${it.sub && it.sport !== 'Strength' ? ' · ' + esc(it.sub) : ''}`).join('<br>') : '<b>Rest</b>'}</td>
+        <td>${items.map(it => (it.sport === 'Strength' ? `<span class="muted">${(it.steps || []).map(esc).join('; ')}</span>` : (it.steps || []).map(esc).join('<br>'))).filter(Boolean).join('<br>')}</td></tr>`; }).join('')}</table>`).join('');
   window.print();
 }
 // ---------- Excel (.xlsx, written by hand: a zip of a few XML files) ----------
@@ -1319,34 +1798,57 @@ function zipStore(files, type){
 }
 const xmlEsc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
 function colName(i){ let s = ''; i++; while (i){ const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
-function sheetXML(rows){
+function sheetXML(rows, widths, dv){
   const body = rows.map((r, ri) => `<row r="${ri + 1}">` + r.map((v, ci) => {
-    const ref = colName(ci) + (ri + 1);
-    if (typeof v === 'number') return `<c r="${ref}"${ri === 0 ? ' s="1"' : ''}><v>${v}</v></c>`;
-    return `<c r="${ref}" t="inlineStr"${ri === 0 ? ' s="1"' : ''}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+    if (v === '' || v === null || v === undefined) return '';
+    const ref = colName(ci) + (ri + 1), st = ri === 0 ? ' s="1"' : '';
+    if (typeof v === 'number') return `<c r="${ref}"${st}><v>${v}</v></c>`;
+    return `<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
   }).join('') + '</row>').join('');
-  const widths = [8, 10, 12, 8, 8, 10, 26, 10, 60, 22, 60];
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${body}</sheetData></worksheet>`;
+  const cols = (widths || []).map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('');
+  const dvx = dv && dv.length ? `<dataValidations count="${dv.length}">${dv.map(([ref, list]) => `<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorStyle="warning" errorTitle="Not in the list" error="Pick from the list, or keep your own value and the app will try to read it." sqref="${ref}"><formula1>"${xmlEsc(list.join(','))}"</formula1></dataValidation>`).join('')}</dataValidations>` : '';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols ? `<cols>${cols}</cols>` : ''}<sheetData>${body}</sheetData>${dvx}</worksheet>`;
 }
+// sheets: [{name, rows, widths, dv}]
+function xlsxBlob(sheets){
+  const files = [
+    {name:'[Content_Types].xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' + sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
+    {name:'_rels/.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {name:'xl/workbook.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' + sheets.map((sh, i) => `<sheet name="${xmlEsc(sh.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>'},
+    {name:'xl/_rels/workbook.xml.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') + `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+    {name:'xl/styles.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'},
+    ...sheets.map((sh, i) => ({name:`xl/worksheets/sheet${i + 1}.xml`, data: sheetXML(sh.rows, sh.widths, sh.dv)}))
+  ];
+  return zipStore(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+// Export: one row per session, in the upload template's columns (plus Date and Phase), so it can be edited and re-uploaded
 function exportXLSX(){
   const unit = A.units;
-  const typeName = r => ({Q:'Quality', T:'Tempo', L:'Long', E:'Easy', R:'Recovery', RACE:'Race', off:'Rest'})[r] || 'Easy';
-  const intensity = r => ({Q:'Hard', T:'Hard', L:'Moderate', RACE:'Hard'})[r] || 'Easy';
-  const rows = [['Week', 'Phase', 'Date', 'Day', 'Sport', 'Type', 'Title', `Distance (${unit})`, 'Details', 'Strength', 'Strength details']];
+  const TYPE = {Q:'Quality', T:'Tempo', L:'Long', E:'Easy', R:'Recovery', RACE:'Race', off:'Rest'};
+  const INT = {Q:'Hard', T:'Hard', L:'Moderate', RACE:'Hard'};
+  const rows = [['Week', 'Day', 'Sport', 'Type', 'Title', 'Details', 'Distance', 'Duration (min)', 'Intensity', 'Date', 'Phase']];
+  const strength = [['Week', 'Session', 'Exercise', 'Sets × reps', 'Load', 'Notes']];
   P.weeks.forEach((W, wi) => W.days.forEach(d => {
-    const dist = d.miles ? Math.round((unit === 'km' ? d.miles * KM : d.miles) * 2) / 2 : '';
-    rows.push([wi + 1, PHASE_NAME[W.phase], iso(d.date), DAYS[(d.date.getDay() + 6) % 7], d.miles ? 'Run' : 'Rest',
-      d.miles ? typeName(d.role) : 'Rest', d.title, dist, (d.steps || []).join(' | '), d.lift || '', (d.liftSteps || []).join(' | ')]);
+    const day = DAYS[(d.date.getDay() + 6) % 7], phase = PHASE_NAME[W.phase] || '';
+    const items = dayItems(d);
+    if (!items.length){ rows.push([wi + 1, day, 'Rest', 'Rest', 'Rest', '', '', '', '', iso(d.date), phase]); return; }
+    items.forEach((it, k) => {
+      const x = it.x;
+      if (it.sport === 'Strength'){
+        const sess = `Strength ${String.fromCharCode(65 + strength.filter(r => r[0] === wi + 1).map(r => r[1]).filter((v, i, a) => a.indexOf(v) === i).length)}`;
+        rows.push([wi + 1, day, 'Strength', '', it.title.startsWith('Strength') && !x ? sess : it.title, 'See the Strength tab', '', x && x.mins ? x.mins : '', x ? x.intensity : 'Moderate', iso(d.date), phase]);
+        (it.steps || []).forEach(line => strength.push([wi + 1, it.title.startsWith('Strength') && !x ? sess : it.title, line, '', '', '']));
+        return;
+      }
+      const dist = x ? (x.sport === 'Swim' ? x.swimDist : x.miles ? Math.round((unit === 'km' ? x.miles * KM : x.miles) * 10) / 10 : '')
+                     : d.miles ? Math.round((unit === 'km' ? d.miles * KM : d.miles) * 2) / 2 : '';
+      rows.push([wi + 1, day, x ? x.sport : 'Run', x ? x.type : (TYPE[d.role] || 'Easy'), it.title, (it.steps || []).join(' | '), dist, x && x.mins ? x.mins : '', x ? x.intensity : (INT[d.role] || 'Easy'), iso(d.date), phase]);
+    });
   }));
-  const files = [
-    {name:'[Content_Types].xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
-    {name:'_rels/.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
-    {name:'xl/workbook.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Plan" sheetId="1" r:id="rId1"/></sheets></workbook>'},
-    {name:'xl/_rels/workbook.xml.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
-    {name:'xl/styles.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'},
-    {name:'xl/worksheets/sheet1.xml', data:sheetXML(rows)}
-  ];
-  download(zipStore(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'), `${A.distance}-training-plan.xlsx`);
+  const dv = [['B2:B2500', DAYS], ['C2:C2500', SPORTS], ['D2:D2500', TYPES], ['I2:I2500', INTENSITIES]];
+  download(xlsxBlob([{name:'Plan', rows, widths:[7, 8, 10, 10, 26, 70, 10, 14, 11, 12, 10], dv},
+                     ...(strength.length > 1 ? [{name:'Strength', rows: strength, widths:[7, 22, 70, 12, 10, 20]}] : [])]),
+    `${planName()}.xlsx`.replace(/\s+/g, '-'));
 }
 
 if (A.built) showPlan(); else render();

@@ -79,6 +79,7 @@ label.field input,label.field select{background:var(--bg);border:1px solid var(-
 .bar button{flex:1;height:48px;border-radius:24px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:600}
 .bar button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .bar button[hidden]{display:none}
+.bar button:disabled{opacity:.4;cursor:default}
 .quiet{font-size:13px;color:var(--muted)}
 
 /* ---------- plan view ---------- */
@@ -152,7 +153,8 @@ const DEFAULTS = {
   timeline:'race', raceDate:'', weeks:12, startDate:nextMonday(),
   benchKind:'race', benchDist:'5K', benchTime:{h:'',m:'',s:''}, goalTime:{h:'',m:'',s:''},
   days:null, longDay:'Sat', qualityDay:'Tue',
-  strength:null, equipment:null
+  strength:null, equipment:null,
+  expert:false, ackTough:false
 };
 let A = load();
 let idx = 0;
@@ -223,7 +225,7 @@ const SCREENS = [
     check: () => {
       if (!A.experience) return 'Pick your experience level.';
       if (A.volume === '' || isNaN(+A.volume) || +A.volume < 0) return 'Enter your recent weekly volume (0 is fine).';
-      if (+A.volume > (A.units==='mi'?150:240)) return 'That volume looks too high. Check the units.';
+      if (!A.expert && +A.volume > (A.units==='mi'?150:240)) return 'That volume looks too high. Check the units.';
       return '';
     }
   },
@@ -243,8 +245,9 @@ const SCREENS = [
       if (A.timeline==='race'){
         if (!A.raceDate) return 'Pick your race date.';
         const w = weeksBetween(A.startDate, A.raceDate);
-        if (w < 3) return 'The race needs to be at least 3 weeks after your start date.';
-        if (w > 30) return 'That race is over 30 weeks out. Start later, or pick a plan length for now.';
+        if (A.expert && w < 0) return 'The race date needs to be after your start date.';
+        if (!A.expert && w < 3) return 'The race needs to be at least 3 weeks after your start date.';
+        if (!A.expert && w > 30) return 'That race is over 30 weeks out. Start later, or pick a plan length for now.';
       }
       return '';
     }
@@ -275,7 +278,7 @@ const SCREENS = [
     title:'How many days a week?',
     lead:'Count running days only. We recommend 4 to 6.',
     render: () => `
-      <div class="card">${choices('days', [3,4,5,6].map(n => ({v:n, label:String(n)})), 'row')}
+      <div class="card">${choices('days', (A.expert ? [1,2,3,4,5,6,7] : [3,4,5,6]).map(n => ({v:n, label:String(n)})), 'row')}
       ${+A.days===3 ? `<p class="flag"><b>Heads up:</b> on 3 days, the long run carries a big share of the week, which is hard on bones and tendons. A 4th short, easy run helps a lot. You can still go with 3.</p>` : ''}
       </div>
       <div class="card"><h3>Your week</h3>
@@ -284,6 +287,7 @@ const SCREENS = [
       <p class="quiet" style="margin:8px 0 0">Your hard workout can be on a track, road or treadmill.</p></div>`,
     check: () => {
       if (!A.days) return 'Pick how many days you can run.';
+      if (A.expert) return '';
       if (A.longDay === A.qualityDay) return 'Put your long run and hard workout on different days.';
       const gap = Math.abs(DAYS.indexOf(A.longDay) - DAYS.indexOf(A.qualityDay));
       if (Math.min(gap, 7-gap) < 2) return 'Leave at least one day between your long run and hard workout.';
@@ -314,11 +318,25 @@ const SCREENS = [
     lead:'Check your answers. Tap Edit to change one.',
     render: () => `<div class="card"><table class="review">${reviewRows().map(([k,v,i]) =>
       `<tr><td>${k}</td><td>${esc(v)}<button type="button" data-goto="${i}">Edit</button></td></tr>`).join('')}</table></div>
+      ${expertCard()}
       <p class="quiet">Your answers and plan are saved on this device only.</p>`,
     check: () => ''
   }
 ];
 
+let expertAsk = false;
+function expertCard(){
+  if (A.expert) return `<div class="card"><h3>Expert mode is on</h3>
+    <p class="sub">Volume, distance and time safety checks are off. The plan builds whatever you ask for.</p>
+    <button type="button" class="choice" data-expert="off"><b>Turn expert mode off</b></button></div>`;
+  if (expertAsk) return `<div class="card"><h3>Are you sure?</h3>
+    <p class="sub">This removes volume, distance and time safety checks. The plan will build whatever you ask for, even if it makes no sense.</p>
+    <div class="choices two"><button type="button" class="choice" data-expert="cancel"><b>Cancel</b></button>
+    <button type="button" class="choice" data-expert="on"><b>Yes, turn it on</b></button></div></div>`;
+  return `<div class="card"><h3>Experienced runner?</h3>
+    <p class="sub">Turn off the caps on long runs, single runs and weekly volume. Off by default.</p>
+    <button type="button" class="choice" data-expert="ask"><b>I know what I'm doing</b></button></div>`;
+}
 function timelineNote(){
   if (A.timeline!=='race' || !A.raceDate || !A.startDate) return '';
   const w = weeksBetween(A.startDate, A.raceDate);
@@ -365,20 +383,31 @@ function rerender(){ // keep scroll + focus-friendly redraw within a screen
 }
 
 $('screen').addEventListener('click', e => {
+  const x = e.target.closest('[data-expert]');
+  if (x){
+    const v = x.dataset.expert;
+    if (v === 'ask') expertAsk = true;
+    if (v === 'cancel') expertAsk = false;
+    if (v === 'on'){ A.expert = true; expertAsk = false; }
+    if (v === 'off'){ A.expert = false; if (+A.days < 3 || +A.days > 6) A.days = null; }
+    A.ackTough = false; save(); rerender(); return;
+  }
+  if (ackMode){ ackClick(e); return; }
   const c = e.target.closest('.choice');
   if (c){
     const name = c.dataset.name; let v = c.dataset.val;
     if (['days','strength'].includes(name)) v = +v;
     A[name] = v;
     if (name==='strength' && v===0) A.equipment = null;
-    save(); rerender(); return;
+    A.ackTough = false; save(); rerender(); return;
   }
   const g = e.target.closest('[data-goto]');
   if (g){ idx = +g.dataset.goto; render(); window.scrollTo(0,0); }
 });
 $('screen').addEventListener('input', e => {
   const t = e.target;
-  if (t.dataset.field){ A[t.dataset.field] = t.value; save(); }
+  if (t.dataset.field){ A[t.dataset.field] = t.value; A.ackTough = false; save(); }
+  if (t.id === 'ackbox'){ $('next').disabled = !t.checked; return; }
   if (t.dataset.time){ t.value = t.value.replace(/\D/g,''); A[t.dataset.time] = Object.assign({}, A[t.dataset.time], {[t.dataset.part]: t.value}); save(); }
   $('err').textContent = '';
 });
@@ -392,11 +421,59 @@ $('next').addEventListener('click', () => {
   if (msg){ $('err').textContent = msg; return; }
   if (idx < SCREENS.length-1){ idx++; render(); window.scrollTo(0,0); }
   else {
+    if (ackMode){
+      if (!$('ackbox') || !$('ackbox').checked){ $('err').textContent = 'Check the box to go ahead, or pick one of the options.'; return; }
+      A.ackTough = true; ackMode = false; $('next').disabled = false; A.built = true; save(); showPlan(); return;
+    }
     for (let i = 0; i < SCREENS.length; i++){ const m = SCREENS[i].check(); if (m){ idx = i; render(); $('err').textContent = m; return; } }
+    if (needsAck()){ showAck(); return; }
     A.built = true; save(); showPlan();
   }
 });
-$('back').addEventListener('click', () => { if (idx > 0){ idx--; render(); window.scrollTo(0,0); } });
+$('back').addEventListener('click', () => {
+  if (ackMode){ ackMode = false; $('next').disabled = false; render(); window.scrollTo(0,0); return; }
+  if (idx > 0){ idx--; render(); window.scrollTo(0,0); }
+});
+
+// ---------- "know what you're signing up for" (marathon, slower or short timeline) ----------
+let ackMode = false;
+function toughNotes(){
+  if (A.expert || A.distance !== 'Full') return null;
+  const t = buildPlan().notes;
+  return (t.timeLimited || t.outkick || t.compressed) ? t : null;
+}
+function needsAck(){ return !A.ackTough && !!toughNotes(); }
+function showAck(){
+  const t = toughNotes(); ackMode = true;
+  const lines = [];
+  if (t.timeLimited) lines.push(`At your easy pace, ${A.days} run days fit about ${fmtDist(t.timeLimited.fit)} a week within the safety caps. Marathon plans like this usually peak around ${fmtDist(t.timeLimited.target)}.`);
+  if (t.outkick) lines.push(`Your timeline is too short to build safely to the usual peak. The plan tops out near ${fmtDist(t.outkick.peak)}.`);
+  else if (t.compressed) lines.push('Your timeline is short, so volume steps up every 2 weeks with no cutback weeks.');
+  lines.push('Lower training volume makes the last miles of a marathon much harder. That can mean a lot of walking.');
+  $('step').textContent = 'Before we build';
+  $('screen').innerHTML = `<h1>Know what you're signing up for</h1>
+    <p class="lead">You can absolutely do this. It's a tough build, so here are the tradeoffs.</p>
+    <div class="card"><ul style="margin:0;padding-left:20px">${lines.map(l => `<li style="margin:6px 0;font-size:15px">${esc(l)}</li>`).join('')}</ul></div>
+    <div class="card"><h3>Ways to make it easier</h3>
+      <div class="choices">
+        <button type="button" class="choice" data-ack="later"><b>Pick a later race or longer plan</b><span>More weeks to build volume safely</span></button>
+        ${+A.days < 6 ? `<button type="button" class="choice" data-ack="day"><b>Add a run day (${+A.days + 1} days)</b><span>More room in each week</span></button>` : ''}
+      </div></div>
+    <div class="card"><label style="display:flex;gap:10px;align-items:flex-start;font-size:15px;cursor:pointer">
+      <input type="checkbox" id="ackbox" style="width:22px;height:22px;margin-top:1px;flex:none">
+      <span>I understand this volume may not be enough to run the whole marathon comfortably, and I want to go ahead.</span></label></div>`;
+  $('err').textContent = '';
+  $('back').hidden = false;
+  $('next').textContent = 'Build my plan'; $('next').disabled = true;
+  window.scrollTo(0, 0);
+}
+function ackClick(e){
+  const b = e.target.closest('[data-ack]');
+  if (!b) return;
+  ackMode = false; $('next').disabled = false;
+  if (b.dataset.ack === 'later'){ idx = 2; render(); window.scrollTo(0,0); }
+  if (b.dataset.ack === 'day'){ A.days = +A.days + 1; save(); if (needsAck()) showAck(); else { A.built = true; save(); showPlan(); } }
+}
 
 // =====================================================================
 // PLAN ENGINE (v0.2 skeleton). Rules come from the Rules Spec doc.
@@ -414,7 +491,7 @@ const BANDS = {
 // Minimum starting volume a plan needs (mi/week)
 const FLOOR = {'5K':6, '10K':8, 'Half':8, 'Full':10};
 // Long run share of the week by run days
-const LONG_SHARE = {3:0.40, 4:0.33, 5:0.30, 6:0.27};
+const LONG_SHARE = {1:1, 2:0.6, 3:0.40, 4:0.33, 5:0.30, 6:0.27, 7:0.25};
 // Long run the plan builds toward by the peak phase (mi), before time/distance caps
 const LR_PEAK = {
   '5K':{new:5, some:7, regular:9}, '10K':{new:6, some:8, regular:10},
@@ -455,10 +532,10 @@ function planWeeks(){
 // Base -> build -> peak -> taper. Base grows with the gap between start and target volume.
 function phaseList(N, gap){
   const D = A.distance;
-  const taper = D === 'Full' ? (N >= 16 ? 3 : 2) : D === 'Half' ? (N >= 10 ? 2 : 1) : 1;
+  const taper = Math.min(N, D === 'Full' ? (N >= 16 ? 3 : 2) : D === 'Half' ? (N >= 10 ? 2 : 1) : 1);
   let peak = (D === 'Full' || D === 'Half') ? 3 : 2;
   if (N < 8) peak = Math.max(1, peak - 1);
-  peak = Math.min(peak, Math.max(1, N - taper));
+  peak = Math.max(0, Math.min(peak, N - taper));
   const rest = Math.max(0, N - taper - peak);
   let base = rest < 2 ? rest : Math.min(rest - 1, Math.max(1, Math.round(rest * (0.4 + 0.3 * gap))));
   const build = rest - base;
@@ -472,7 +549,7 @@ function rampVolumes(start, target, rampWeeks, notes){
   let m = tryMode(4), mode = 'normal';
   if (m.r - 1 > 0.15){ m = tryMode(2); mode = 'compressed'; }
   let peak = target;
-  if (m.r - 1 > 0.20){ m.r = 1.20; peak = start * Math.pow(1.2, m.B); mode = 'compressed'; notes.outkick = {peak, target}; }
+  if (!A.expert && m.r - 1 > 0.20){ m.r = 1.20; peak = start * Math.pow(1.2, m.B); mode = 'compressed'; notes.outkick = {peak, target}; }
   if (mode === 'compressed') notes.compressed = true;
   const levels = [], cut = [];
   for (let w = 0; w < rampWeeks; w++){
@@ -489,19 +566,23 @@ function rampVolumes(start, target, rampWeeks, notes){
 function weekLayout(){
   const n = +A.days, L = DAYS.indexOf(A.longDay), Q = DAYS.indexOf(A.qualityDay);
   const roles = Array(7).fill('off');
-  roles[L] = 'L'; roles[Q] = 'Q';
+  roles[L] = 'L';
+  if (n === 1) return roles;
+  const Qd = Q === L ? (L + 3) % 7 : Q;
+  roles[Qd] = 'Q';
+  if (n === 2) return roles;
   const dist = (a, b) => { const g = Math.abs(a - b); return Math.min(g, 7 - g); };
   // Tempo: as far from both the long run and the quality day as possible, prefer after the quality day
   let best = -1, bestScore = -1;
   for (let d = 0; d < 7; d++){
     if (roles[d] !== 'off') continue;
-    const score = Math.min(dist(d, L), dist(d, Q)) * 10 + ((d - Q + 7) % 7 < (Q - d + 7) % 7 ? 1 : 0);
+    const score = Math.min(dist(d, L), dist(d, Qd)) * 10 + ((d - Qd + 7) % 7 < (Qd - d + 7) % 7 ? 1 : 0);
     if (score > bestScore){ bestScore = score; best = d; }
   }
   roles[best] = 'T';
   // Extra easy days: recovery after the long run, then around the quality day; never the day before the long run unless needed
   const T = best;
-  const pref = [(L + 1) % 7, (Q + 1) % 7, (Q + 6) % 7, (T + 1) % 7, (T + 6) % 7, 0,1,2,3,4,5,6, (L + 6) % 7];
+  const pref = [(L + 1) % 7, (Qd + 1) % 7, (Qd + 6) % 7, (T + 1) % 7, (T + 6) % 7, 0,1,2,3,4,5,6, (L + 6) % 7];
   let extra = n - 3;
   for (const d of pref){
     if (extra <= 0) break;
@@ -556,7 +637,7 @@ function buildPlan(){
   const pace = easyPace();
   const band = BANDS[D][lvl];
   const recent = volMi();
-  const start = Math.max(recent, FLOOR[D]);
+  const start = A.expert ? Math.max(recent, 1) : Math.max(recent, FLOOR[D]);
   if (start > recent + 0.5) notes.floor = start;
   let target = start >= band[1] ? start * 1.05 : Math.min(band[1], Math.max(band[0], start * 1.25));
   // Time-aware ceiling: what fits in the week without breaking the long-run and single-run caps
@@ -564,7 +645,7 @@ function buildPlan(){
   const lrCap0 = Math.min(tCap / pace, D === 'Full' ? (lvl === 'regular' ? 22 : 20) : D === 'Half' ? 15 : 13);
   const fits = k => 0.95 * (lrCap0 + (k - 1) * (70 / pace)
     - (k >= 5 ? (70 - 45) / pace : 0) + (k >= 5 ? Math.max(0, Math.min(0.7 * lrCap0, 90 / pace) - 70 / pace) : 0));
-  if (target > fits(n) + 1){
+  if (!A.expert && target > fits(n) + 1){
     notes.timeLimited = {target, fit: fits(n), next: n < 6 ? Math.min(target, fits(n + 1)) : null, overStart: start > fits(n)};
     target = Math.max(start, fits(n));
   }
@@ -577,8 +658,8 @@ function buildPlan(){
   const layout = weekLayout();
   const startDate = parseDate(A.startDate);
   const raceDate = A.timeline === 'race' ? parseDate(A.raceDate) : null;
-  const timeCap = (D === '5K' || D === '10K') ? {new:60, some:75, regular:90}[lvl] : 150;
-  const distCap = D === 'Full' ? (lvl === 'regular' ? 22 : 20) : D === 'Half' ? 15 : 13;
+  const timeCap = A.expert ? Infinity : (D === '5K' || D === '10K') ? {new:60, some:75, regular:90}[lvl] : 150;
+  const distCap = A.expert ? Infinity : D === 'Full' ? (lvl === 'regular' ? 22 : 20) : D === 'Half' ? 15 : 13;
   const minRun = 25 / pace, minRec = 20 / pace;
   const capMiAll = Math.min(timeCap / pace, distCap);
   const peakIdx = phases.map((p, i) => p === 'peak' ? i : -1).filter(i => i >= 0);
@@ -586,10 +667,10 @@ function buildPlan(){
   // Marathon: slower runners with a long enough plan may take the dress-rehearsal long runs
   // to 3 hours or 16 mi. Every other long run stays under ~2.5 hours.
   const extCap = Math.min(180 / pace, 16);
-  const extOK = D === 'Full' && extCap > capMiAll + 0.5 && N >= 16 && start * LONG_SHARE[n] >= 6;
-  if (D === 'Full' && extCap > capMiAll + 0.5 && !extOK) notes.shortForExt = true;
+  const extOK = !A.expert && D === 'Full' && extCap > capMiAll + 0.5 && N >= 16 && start * LONG_SHARE[n] >= 6;
+  if (!A.expert && D === 'Full' && extCap > capMiAll + 0.5 && !extOK) notes.shortForExt = true;
   // Caps for runs other than the long run
-  const runCap = 70 / pace, recCap = 45 / pace, mlrCap = 90 / pace;
+  const runCap = A.expert ? Infinity : 70 / pace, recCap = A.expert ? Infinity : 45 / pace, mlrCap = 90 / pace;
   const circ = (a, b) => { const g = Math.abs(a - b); return Math.min(g, 7 - g); };
   const RW = {Q:1.15, T:1.15, E:1, R:0.7};
   // Split the non-long-run volume across the week. Single runs are capped; on 5-6 days the
@@ -634,7 +715,7 @@ function buildPlan(){
       if (ramp.cut[w]) longMi *= 0.8;
       const ext = extOK && rehearsals.has(w);
       if (ext) longMi = Math.max(longMi, extCap);
-      longMi = Math.min(longMi, vol * 0.55);
+      longMi = Math.min(longMi, vol * (A.expert ? 1 : 0.55));
       const capThis = ext ? extCap : capMiAll;
       if (longMi > capThis){ longMi = capThis; if (!(D === '5K' || D === '10K')) notes.capped = true; }
       if (ext && longMi > capMiAll + 0.5) notes.extended = Math.max(notes.extended || 0, longMi);
@@ -709,6 +790,7 @@ function showQuiz(){
 }
 function noteList(){
   const N = P.notes, out = [];
+  if (A.expert) return ['Expert mode is on: volume, distance and time safety checks are off.', 'Not medical advice. Listen to your body and adjust.'];
   if (+A.days === 3) out.push('On 3 run days, the long run is a big share of your week. A 4th short, easy run would make the plan easier on your body.');
   if (N.floor) out.push(`Week 1 starts at about ${fmtDist(N.floor)}, a bit above your recent volume, because this plan needs a minimum base.`);
   if (N.outkick) out.push(`Your timeline can't safely reach this plan's usual peak of ${fmtDist(N.outkick.target)}. It tops out near ${fmtDist(N.outkick.peak)}. A later race or shorter distance would help, or treat this as a finish-focused plan.`);

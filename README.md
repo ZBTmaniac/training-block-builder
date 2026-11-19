@@ -12,6 +12,7 @@ Build a run training plan, or upload your own, and keep it on your phone. No acc
 - **Helps when life happens.** Tell it you missed a few days, a week, or more and it tells you what to keep, what to skip, and can push your plan back.
 - **Flags, doesn't forbid.** If a goal looks like a stretch, a timeline is short, or a week is crowded, it says so and suggests fixes. You always get the plan you choose.
 - **Goes where you need it:** add sessions to your calendar, save a PDF, or download an Excel file you can edit and upload again.
+- **Gets workouts onto your watch.** Download structured `.fit` workouts (Garmin, Coros, Intervals.icu) or `.zwo` files (TrainingPeaks, Zwift), or send your plan straight to your Intervals.icu calendar with your own API key, which Intervals.icu can then sync to Garmin.
 - **Plans for heat.** Warm race? It adds heat-adaptation work and race-day guidance.
 
 ## Put it on your phone
@@ -42,9 +43,23 @@ These are the main rules. The full rules, with the plans and research they come 
 
 </details>
 
+## Getting workouts onto your watch
+
+| You use | Do this |
+| --- | --- |
+| **Intervals.icu** (recommended for Garmin) | In the plan view, open **Send to Intervals.icu**, paste your API key (Intervals.icu → Settings → Developer Settings), and send. Turn on "Upload planned workouts" in Intervals.icu's Garmin settings and the next week reaches your watch at each sync. Sending again updates the same workouts; **Remove sent** deletes only what this app added. |
+| **Garmin, no Intervals.icu** | Tap **Watch files (.fit)**, unzip, and copy the files to the watch's `GARMIN/NewFiles` folder over USB, or import them in Garmin Connect on the web where it offers import. |
+| **TrainingPeaks** | Tap **TrainingPeaks/Zwift (.zwo)**, unzip, then in your Workout Library open a folder's menu → **Import Workout** and select the files. TrainingPeaks can sync them to Garmin. |
+| **Zwift** | Copy the `.zwo` files into `Documents/Zwift/Workouts/<your Zwift ID>`. |
+| **Coros, Polar, others** | Use the app's workout import with the `.fit` files. |
+
+Watch files are made for generated run workouts, with pace or heart-rate targets for each step. Uploaded plans go to Intervals.icu and your calendar with their full text, but don't get step-by-step watch files.
+
 ## Privacy
 
 Everything you enter, and every file you upload, stays on your device. There's no account, no tracking, and no server receiving your data. Clearing your browser data clears your plan.
+
+If you use **Send to Intervals.icu**, your API key is saved only on your device and sent only to intervals.icu. The key gives full access to your Intervals.icu account, so don't save it on a shared device.
 
 ## Not medical advice
 

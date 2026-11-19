@@ -181,7 +181,8 @@ const DEFAULTS = {
   strength:null, equipment:null,
   expert:false, ackTough:false,
   lthr:'', lthrSource:'test', effort:'pace',
-  mode:'gen', custom:null
+  mode:'gen', custom:null,
+  heat:'', heatVsTraining:''
 };
 let A = load();
 let idx = 0;
@@ -268,7 +269,7 @@ const SCREENS = [
         ${A.timeline==='race'
           ? `<label class="field">Race date <input type="date" data-field="raceDate" value="${esc(A.raceDate)}"></label>`
           : `<label class="field">Weeks <select data-field="weeks">${[6,8,10,12,14,16,18,20].map(w=>`<option ${+A.weeks===w?'selected':''}>${w}</option>`).join('')}</select></label>`}
-      </div>${timelineNote()}</div>`,
+      </div>${timelineNote()}</div>${A.timeline === 'race' ? heatCard() : ''}`,
     check: () => {
       if (!A.startDate) return 'Pick a start date.';
       if (A.timeline==='race'){
@@ -374,6 +375,34 @@ function expertCard(){
     <p class="sub">Turn off the caps on long runs, single runs and weekly volume. Off by default.</p>
     <button type="button" class="choice" data-expert="ask"><b>I know what I'm doing</b></button></div>`;
 }
+// ---------- race-day heat ----------
+const HEAT = {
+  cool:{label:'Cool', sub:'Under 55°F / 13°C'}, mild:{label:'Mild', sub:'55–65°F / 13–18°C'},
+  warm:{label:'Warm', sub:'65–75°F / 18–24°C'}, hot:{label:'Hot', sub:'Over 75°F / 24°C'}, unsure:{label:'Not sure', sub:'We\'ll keep it neutral'}
+};
+const isHotRace = () => A.timeline === 'race' && (A.heat === 'warm' || A.heat === 'hot');
+function heatCard(){
+  return `<div class="card"><h3>How warm will race day likely be?</h3>
+    <p class="sub">Your best guess for the time of day you'll be racing. Humidity makes any of these feel hotter.</p>
+    ${choices('heat', Object.entries(HEAT).map(([v, h]) => ({v, label: h.label, sub: h.sub})), 'two')}
+    ${isHotRace() ? `<h3 style="margin-top:14px">Compared with the weather you train in?</h3>
+      ${choices('heatVsTraining', [{v:'similar', label:'About the same'}, {v:'hotter', label:'Hotter than I train in'}], 'two')}` : ''}
+    <details style="margin-top:12px"><summary class="quiet" style="cursor:pointer">How heat affects racing, and what to do about it</summary>
+      <div style="font-size:14px;margin-top:8px">
+        <p style="margin:0 0 8px"><b>Expect to slow down.</b> Most runners race best somewhere around 45–60°F (7–15°C). Above that, the same pace takes more effort. In marathons, mid-pack runners slow by roughly 4–5 seconds per mile for every °C (about 2°F) above 60°F, and humidity makes it worse. Shorter races are affected less.</p>
+        <p style="margin:0 0 8px"><b>Your body adapts in 1–2 weeks.</b> With regular heat exposure, most adaptations happen within 7–14 days: lower heart rate at the same effort, more blood plasma, and earlier, heavier sweating.</p>
+        <p style="margin:0 0 8px"><b>How to adapt:</b> do some easy runs in the warmest part of the day, or sit in a sauna or hot bath right after a run. Start with 10–15 minutes and build toward 20–30. Keep the runs easy, drink plenty, and stop if you feel dizzy, confused or stop sweating. We don't recommend overdressing (sweat suits and extra layers): it's riskier, and there's little evidence it helps athletes already trained for their race.</p>
+        <p style="margin:0 0 8px"><b>On race day:</b> start slower than goal pace, drink to thirst with some sodium, pour water over yourself at aid stations, and adjust your goal to the conditions. Pacing by effort or heart rate works better than pace in the heat.</p>
+        <p class="quiet" style="margin:0">If you pick Warm or Hot, the plan adds heat-adaptation work in the two weeks before race week and race-day heat tips.</p>
+      </div></details></div>`;
+}
+function heatSlowdown(){
+  // ~4–4.5 s/mi per °C above ~15°C for mid-pack marathoners; scaled by distance
+  if (!isHotRace()) return null;
+  const overC = A.heat === 'hot' ? [9, 13] : [3, 8];
+  const scale = {'5K':0.35, '10K':0.5, 'Half':0.75, 'Full':1}[A.distance] || 1;
+  return overC.map(c => Math.round(c * 4.25 * scale / (A.units === 'km' ? KM : 1)));
+}
 function timelineNote(){
   if (A.timeline!=='race' || !A.raceDate || !A.startDate) return '';
   const w = weeksBetween(A.startDate, A.raceDate);
@@ -396,6 +425,7 @@ function reviewRows(){
     ['Weekly volume', `${A.volume} ${A.units}`, 1],
     ['Timeline', when, 2],
     ['Start', A.startDate, 2],
+    ...(A.timeline === 'race' ? [['Race-day weather', A.heat ? HEAT[A.heat].label + (isHotRace() && A.heatVsTraining === 'hotter' ? ', hotter than training' : '') : '—', 2]] : []),
     ['Benchmark', bench, 3],
     ['Goal time', fmtTime(A.goalTime), 3],
     ['Threshold HR', A.lthr !== '' ? `${A.lthr} bpm${A.lthrSource === 'watch' ? ' (watch)' : ''}, show ${A.effort === 'hr' ? 'HR' : 'pace'}` : '—', 3],
@@ -1039,6 +1069,15 @@ function buildPlan(){
     const f = pCount[W.phase] > 1 ? (k - 1) / (pCount[W.phase] - 1) : 1;
     W.days.forEach(d => {
       d.steps = workoutSteps(d, W.phase, f, k, pace);
+      if (isHotRace() && raceDate){
+        const toRace = Math.round((raceDate - d.date) / 864e5);
+        if (toRace >= 8 && toRace <= 21 && ['E','R','MLR'].includes(d.kind))
+          d.steps.push('Heat adaptation: run this one in the warmest part of the day, or follow it with a sauna or hot bath (start at 10–15 min, build toward 20–30). Keep it easy, drink plenty, and stop if you feel dizzy.');
+        if (toRace >= 8 && toRace <= 35 && d.kind === 'L')
+          d.steps.push('Warm-race practice: drink to thirst with sodium, and wear what you\'ll race in.');
+        if (d.kind === 'RACE')
+          d.steps.unshift(`Heat plan: start ${heatSlowdown()[0]}–${heatSlowdown()[1]} s/${A.units} slower than your cool-weather goal, run by effort, and pour water on yourself at aid stations.`);
+      }
       if (d.lift) d.liftSteps = liftSteps(d.lift, W.phase, f, W.cut);
     });
   });
@@ -1091,6 +1130,10 @@ function noteList(){
   if (N.share) out.push('Your long run is more than 40% of some weeks. Adding a short run or a midweek medium-long run would spread the load.');
   if (lthrVal() && A.lthrSource === 'watch') out.push('Your threshold HR is a watch estimate. A field test (hard 30 min solo, average HR over the last 20 min) will make your HR targets more accurate.');
   if (lthrVal() && A.effort === 'hr') out.push('Short, fast reps show pace or RPE instead of HR, because heart rate lags behind the effort on short intervals.');
+  if (isHotRace()){
+    const sd = heatSlowdown();
+    out.push(`Race day is likely ${A.heat}. Expect to run roughly ${sd[0]}–${sd[1]} seconds per ${A.units} slower than in cool weather${A.heatVsTraining === 'hotter' ? ', more since it\'s hotter than you train in' : ''}. The last two weeks before race week include heat-adaptation work.`);
+  }
   if (A.benchKind === 'aspire') out.push('Your paces come from a best-guess time. Run a time trial in week 3 or 4 to check them.');
   out.push('Not medical advice. Listen to your body and adjust.');
   return out;

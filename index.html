@@ -234,7 +234,7 @@ const SCREENS = [
     render: () => choices('distance', [
       {v:'5K', label:'5K', sub:'3.1 mi'}, {v:'10K', label:'10K', sub:'6.2 mi'},
       {v:'Half', label:'Half marathon', sub:'13.1 mi'}, {v:'Full', label:'Marathon', sub:'26.2 mi'}
-    ], 'two') + `<div class="card" style="margin-top:16px"><h3>Already have a plan?</h3>
+    ], 'two') + `<p class="quiet" style="margin:12px 0 0"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a></p><div class="card" style="margin-top:16px"><h3>Already have a plan?</h3>
       <p class="sub">Upload it from a spreadsheet and use this app to follow it, add strength, and export it.</p>
       <button type="button" class="choice" data-upload="1"><b>Upload my own plan</b><span>Excel or CSV</span></button></div>`,
     check: () => A.distance ? '' : 'Pick a distance to continue.'
@@ -296,7 +296,8 @@ const SCREENS = [
       </div>
       <div class="card"><h3>Goal time <span class="quiet">(optional)</span></h3>
       <p class="sub">We'll tell you how it compares with where your fitness is likely to be on race day.</p>
-      <label class="field">${esc(A.distance||'Race')} goal ${timeInputs('goalTime')}</label></div>
+      <label class="field">${esc(A.distance||'Race')} goal ${timeInputs('goalTime')}</label>
+      <div id="goallive">${goalLive()}</div></div>
       <div class="card"><h3>Threshold heart rate <span class="quiet">(optional)</span></h3>
       <p class="sub">Lets the plan show heart-rate targets. A tested number is best; a watch estimate works too.</p>
       <label class="field">Threshold HR (bpm) <input type="number" inputmode="numeric" data-field="lthr" value="${esc(A.lthr)}" placeholder="e.g. 171"></label>
@@ -482,6 +483,7 @@ $('screen').addEventListener('input', e => {
   if (t.dataset.field){ A[t.dataset.field] = t.value; A.ackTough = false; save(); }
   if (t.id === 'ackbox'){ $('next').disabled = !t.checked; return; }
   if (t.dataset.time){ t.value = t.value.replace(/\D/g,''); A[t.dataset.time] = Object.assign({}, A[t.dataset.time], {[t.dataset.part]: t.value}); save(); }
+  if ($('goallive') && (t.dataset.time || t.dataset.field === 'benchDist')) $('goallive').innerHTML = goalLive();
   $('err').textContent = '';
 });
 $('screen').addEventListener('change', e => {
@@ -958,10 +960,11 @@ function goalCheck(N){
   if (!t5 || !g) return null;
   const proj = t5 * Math.pow(DIST_MI[A.distance] / 3.107, 1.06);
   const r = {new:[0.05, 0.10], some:[0.03, 0.06], regular:[0.01, 0.03]}[A.experience];
-  const sc = Math.min(1, N / 12);
+  // Up to 12 weeks scales linearly; longer plans allow up to 1.5x the range at 24 weeks, with lower confidence
+  const sc = N <= 12 ? N / 12 : 1 + 0.5 * Math.min(1, (N - 12) / 12);
   const fast = proj * (1 - r[1] * sc), slow = proj * (1 - r[0] * sc);
   const tier = g >= fast ? 'on' : g >= fast * 0.95 ? 'amb' : 'big';
-  return {fast, slow, goal: g, tier};
+  return {fast, slow, goal: g, tier, weeks: N, longPlan: N > 12, ambCut: fast * 0.95};
 }
 function fmtSecs(x){
   x = Math.round(x); const h = Math.floor(x / 3600), m = Math.floor(x % 3600 / 60), s = x % 60;
@@ -1275,6 +1278,7 @@ function drawPlan(){
     <details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
       <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul>
       ${!P.custom && (P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}</details>
+    <p class="quiet" style="margin:0 0 12px"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a></p>
     <details class="card notes"><summary>All weeks</summary><table class="overview">${overview}</table></details>
     <div class="card" id="missed" style="margin-top:16px">${missedPanel()}</div>
     ${icuCard()}
@@ -1311,10 +1315,27 @@ function goalCard(){
     big:'Your goal is well beyond your projected range. Race-pace workouts use your projected pace instead, so the plan stays safe. Re-test partway through and update your benchmark if you\'re ahead of schedule.'
   }[g.tier];
   const caveat = [A.benchKind === 'aspire' ? 'Your benchmark is a best guess, so this is too. A time trial in week 3 or 4 will sharpen it.' : '',
-    A.distance === 'Full' ? 'Marathon projections from shorter races run optimistic, especially for newer marathoners.' : ''].filter(Boolean).join(' ');
+    A.distance === 'Full' ? 'Marathon projections from shorter races run optimistic, especially for newer marathoners.' : '', goalConfNote(g)].filter(Boolean).join(' ');
   return `<div class="card goal goal-${g.tier}" style="margin-top:16px"><h3>Goal check: ${label}</h3>
     <p style="margin:0 0 6px;font-size:15px">Projected race-day range: <b>${fmtSecs(g.fast)}–${fmtSecs(g.slow)}</b>. Your goal: <b>${fmtSecs(g.goal)}</b>.</p>
     <p style="margin:0;font-size:15px">${msg}</p>${caveat ? `<p class="quiet" style="margin:8px 0 0">${caveat}</p>` : ''}</div>`;
+}
+const RULES_URL = 'https://github.com/ZBTmaniac/training-block-builder/blob/main/RULES.md';
+const GOAL_LABEL = {on:'On track', amb:'Ambitious', big:'Big stretch'};
+function goalConfNote(g){
+  return g.longPlan ? `Projections past 12 weeks are less certain. This ${g.weeks}-week estimate assumes steady progress, so re-test partway through.` : '';
+}
+// Live goal check on the benchmark screen, same formula as the plan's goal card
+function goalLive(){
+  if (!A.distance || !A.experience || !A.startDate) return '';
+  const N = A.timeline === 'race' ? (A.raceDate ? planWeeks() : 0) : +A.weeks;
+  if (!N || N < 1) return '';
+  const g = goalCheck(N); if (!g) return '';
+  const hint = g.tier === 'big' ? ` For Ambitious, aim for ${fmtSecs(g.ambCut)} or slower.` : g.tier === 'amb' ? ` For On track, ${fmtSecs(g.fast)} or slower.` : '';
+  return `<p class="flag" style="border-left-color:${g.tier === 'on' ? 'var(--bike)' : g.tier === 'amb' ? 'var(--lift)' : '#B3261E'}"><b>Goal check: ${GOAL_LABEL[g.tier]}.</b>
+    Over ${g.weeks} weeks you're likely to be in the <b>${fmtSecs(g.fast)}–${fmtSecs(g.slow)}</b> range.${hint}
+    ${g.longPlan ? `<br><span class="quiet">${goalConfNote(g)}</span>` : ''}
+    <br><a href="${RULES_URL}#paces-and-heart-rate" target="_blank" rel="noopener" class="quiet">How this is calculated</a></p>`;
 }
 function liftHint(t){
   const eq = {bw:'Bodyweight', db:'Dumbbells/kettlebells', bb:'Barbell'}[A.equipment] || '';

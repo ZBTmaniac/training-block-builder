@@ -58,7 +58,12 @@ New runners get easier versions of the quality days. When marathon long runs car
 
 - A recent race or time trial is converted to a 5K equivalent (Riegel's formula), and training paces are set from it in the style of Daniels' VDOT tables.
 - Heart-rate targets are percentages of threshold heart rate. Short, fast reps use pace or effort instead, because heart rate lags on short intervals.
-- Goal check: the benchmark is projected to race day with a conservative improvement range (about 1–3% for advanced runners, 3–6% for intermediate, 5–10% for beginners over 12–16 weeks). Goals are rated on track, ambitious (up to about 5% faster than the range) or big stretch. Big-stretch goals use projected pace for race-pace workouts, so nobody does reps at a pace they can't hold.
+- Goal check:
+  1. Project the benchmark to the goal distance: projected = benchmark time × (goal distance ÷ benchmark distance)^1.06 (Riegel).
+  2. Expected improvement by race day: about 5–10% for new runners, 3–6% for runners who've trained before, 1–3% for runners who train regularly, for a 12-week plan. Shorter plans scale down in proportion; longer plans scale up to 1.5× at 24 weeks, flagged as less certain.
+  3. Projected range: fast end = projected × (1 − high %), slow end = projected × (1 − low %).
+  4. Rating: at or slower than the fast end is on track; up to 5% faster is ambitious; faster than that is a big stretch.
+  The check shows live on the benchmark screen and again on the plan. Big-stretch goals use projected pace for race-pace workouts, so nobody does reps at a pace they can't hold.
 
 ## Strength
 

@@ -173,6 +173,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
+const APP_VERSION = '0.7.3';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -2379,7 +2380,6 @@ function exportXLSX(){
 
 if (A.built) showPlan(); else render();
 
-const APP_VERSION = '0.7.3';
 if ('serviceWorker' in navigator) {
   // When a new version takes over, reload once so the page matches it
   const hadController = !!navigator.serviceWorker.controller;   // first visit: nothing to refresh

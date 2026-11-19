@@ -98,12 +98,12 @@ label.field input,label.field select{background:var(--bg);border:1px solid var(-
 .bars{display:flex;align-items:flex-end;gap:3px;height:44px}
 .bar-run{width:7px;border-radius:2px;background:var(--run)}
 .bar-run.race{background:var(--lift)}
-.bar-run.bike{background:var(--bike)} .bar-run.swim{background:var(--swim)}
+.bar-run.bike{background:var(--bike)} .bar-run.swim{background:var(--swim)} .bar-run.other{background:var(--rest)}
 .bar-lift{width:7px;height:10px;border-radius:2px;background:var(--lift)}
 .bar-rest{background:var(--rest);height:4px;width:4px;border-radius:2px}
 .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:0 0 14px}
 .legend span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
-.legend .l-run::before{background:var(--run)} .legend .l-lift::before{background:var(--lift)} .legend .l-bike::before{background:var(--bike)} .legend .l-swim::before{background:var(--swim)}
+.legend .l-run::before{background:var(--run)} .legend .l-lift::before{background:var(--lift)} .legend .l-bike::before{background:var(--bike)} .legend .l-swim::before{background:var(--swim)} .legend .l-other::before{background:var(--rest)}
 .issues{margin:6px 0 0;padding-left:18px;font-size:14px}
 .issues li{margin:4px 0}
 .filebtn{display:block;text-align:center;border:1px dashed var(--line);border-radius:10px;padding:16px;cursor:pointer;background:var(--bg);font-weight:600}
@@ -1065,7 +1065,7 @@ function noteList(){
   const N = P.notes, out = [];
   if (P.custom){
     const C = A.custom;
-    out.push(`Imported from ${C.fileName}: ${C.sessions.filter(x => x.sport !== 'Rest').length} sessions over ${C.weeks} weeks.`);
+    out.push(`Imported from ${C.fileName}: ${C.sessions.filter(x => x.sport !== 'Rest' && !x.optional).length} sessions${C.sessions.some(x => x.optional) ? ` (+${C.sessions.filter(x => x.optional).length} optional)` : ''} over ${C.weeks} weeks.`);
     if (C.problems.length) out.push(`${C.problems.length} row${C.problems.length > 1 ? 's were' : ' was'} skipped when importing. Upload a fixed file to bring ${C.problems.length > 1 ? 'them' : 'it'} back.`);
     C.placement.slice(0, 10).forEach(t => out.push(t));
     if (C.placement.length > 10) out.push(`…and ${C.placement.length - 10} more scheduling notes.`);
@@ -1116,7 +1116,7 @@ function drawPlan(){
     const isToday = +d.date === +today;
     const items = dayItems(d);
     const sum = items.length ? items.map(it => it.sport === 'Strength' ? 'Strength' : (it.sub || it.sport)).join(' · ') : 'Rest day';
-    const head = items.length ? items.filter(it => it.sport !== 'Strength').map(it => it.title).join(' + ') || items[0].title : 'Rest';
+    const head = items.length ? items.filter(it => it.sport !== 'Strength' && !(it.x && it.x.optional)).map(it => it.title).join(' + ') || items[0].title : 'Rest';
     return `<details class="day ${isToday ? 'is-today' : ''}" id="d${i}" ${isToday ? 'open' : ''}>
       <summary><span class="dnum">${d.date.getDate()}</span>
         <span><span class="dn">${DAYS[(d.date.getDay() + 6) % 7]} · ${esc(head)}</span><br><span class="sumline">${esc(sum)}</span></span>
@@ -1127,7 +1127,7 @@ function drawPlan(){
       </div></details>`;
   }).join('');
   const overview = P.weeks.map((w, i) => `<tr class="${i === wk ? 'cur' : ''}"><td><button data-week="${i}">Week ${i+1}</button></td><td>${PHASE_NAME[w.phase] || ''}</td><td>${fmtDist(w.total)}${P.custom ? ' run' : ''}</td></tr>`).join('');
-  const sportsUsed = P.custom ? [...new Set(A.custom.sessions.map(x => SPORT_CLS[x.sport]).filter(c => ['run','bike','swim','lift'].includes(c)))] : null;
+  const sportsUsed = P.custom ? [...new Set(A.custom.sessions.map(x => SPORT_CLS[x.sport]).filter(c => ['run','bike','swim','lift','other'].includes(c)))] : null;
   $('plan').innerHTML = `
     <p class="phase">${P.custom ? esc(planName()) : `${PHASE_NAME[W.phase]} phase · ${esc(A.distance)} plan`}</p>
     <div class="weekrow"><div>
@@ -1137,7 +1137,7 @@ function drawPlan(){
       <button id="pnext" aria-label="Next week" ${wk === P.N - 1 ? 'disabled' : ''}>›</button></div></div>
     ${PHASE_NOTE[W.phase] ? `<p class="weeknote">${PHASE_NOTE[W.phase]}</p>` : ''}
     <div class="strip">${strip}</div>
-    <div class="legend">${sportsUsed ? sportsUsed.map(c => `<span class="l-${c}">${({run:'Run', bike:'Bike', swim:'Swim', lift:'Strength'})[c]}</span>`).join('') : `<span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}`}</div>
+    <div class="legend">${sportsUsed ? sportsUsed.map(c => `<span class="l-${c}">${({run:'Run', bike:'Bike', swim:'Swim', lift:'Strength', other:'Cross-train'})[c]}</span>`).join('') : `<span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}`}</div>
     ${cards}
     ${goalCard()}
     <details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
@@ -1194,7 +1194,7 @@ function liftHint(t){
 // =====================================================================
 let uploadMode = false;
 let UP = null;                       // parsed upload awaiting import
-let UPF = {start: nextMonday(), units: 'mi', busy: false, error: ''};
+let UPF = {start: nextMonday(), units: 'mi', range: 'mid', busy: false, error: '', paste: ''};
 
 const SPORTS = ['Run', 'Bike', 'Swim', 'Brick', 'Strength', 'Other', 'Rest'];
 const TYPES = ['Easy', 'Quality', 'Tempo', 'Long', 'Recovery', 'Race', 'Rest'];
@@ -1357,6 +1357,9 @@ function parseUpload(sheets, fileName){
     if (!planSheet && !/strength|lift/i.test(n)){ const h = findHeader(rows, {all: planKeys, req: ['week','day']}); if (h){ planSheet = n; planHead = h; continue; } }
     if (!strSheet){ const h = findHeader(rows, {all: strKeys, req: ['week','exercise']}); if (h){ strSheet = n; strHead = h; } }
   }
+  if (!planSheet){
+    for (const n of names){ const g = findGrid(sheets[n]); if (g) return parseGrid(sheets[n], g, fileName); }
+  }
   if (!planSheet) return {fatal: `We couldn't find a header row with Week and Day columns${names.length > 1 ? ' on any tab' : ''}. Start from the template, or check the column names.`};
   const rows = sheets[planSheet], H = planHead.keys;
   const col = k => H.indexOf(k);
@@ -1439,11 +1442,153 @@ function parseUpload(sheets, fileName){
   return plan;
 }
 
+
+// ---------- weekly-grid layout: weeks down the side, days across the top, a day's training as text in each cell ----------
+function dayName(c){
+  const t = normS(c).replace(/[.:]/g, '');
+  if (!t || t.length < 2) return null;
+  if (SYN.day[t] !== undefined) return SYN.day[t];
+  const m = /^day\s*(\d)$/.exec(t); return m && +m[1] >= 1 && +m[1] <= 7 ? +m[1] - 1 : null;
+}
+function findGrid(rows){
+  for (let i = 0; i < Math.min(rows.length, 40); i++){
+    const r = rows[i] || [], dayCols = {};
+    r.forEach((c, ci) => { const d = dayName(c); if (d !== null && !Object.values(dayCols).includes(d)) dayCols[ci] = d; });
+    if (Object.keys(dayCols).length < 5) continue;
+    // week labels: the column (left of the days) whose cells below read like "Week 3" or "3"
+    let weekCol = -1, best = 0;
+    const width = Math.max(...rows.slice(i + 1, i + 30).map(x => (x || []).length), 0);
+    for (let c = 0; c < width; c++){
+      if (dayCols[c] !== undefined) continue;
+      const hits = rows.slice(i + 1).filter(x => x && /^\s*(week|wk)?\s*\d+\s*$/i.test(String(x[c] ?? ''))).length;
+      if (hits > best){ best = hits; weekCol = c; }
+    }
+    return {row: i, dayCols, weekCol};
+  }
+  return null;
+}
+function cleanText(t){
+  return String(t ?? '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\*\*|__/g, '').replace(/\\([!*_#\[\]().\-+|])/g, '$1').replace(/ /g, ' ').trim();
+}
+// Split a cell into readable steps. Paragraph breaks win; otherwise split sentences, including run-on
+// ones joined by a space where a new sentence starts with a capitalized word ("recovery On uphill...").
+function cellSteps(text){
+  const paras = text.split(/\n+/).map(x => x.trim()).filter(Boolean);
+  const out = [];
+  for (const p of paras){
+    p.replace(/([a-z0-9%)!?.])\s+(?=(Optional|On|If|It|It's|This|These|The|Today|Thursday|Really|Just|Keep|Aim|Think|Focus|Note|Now|Big|Adding|Drift|Check|You|Only|Slight|Aerobic|Heat|Rest|Easy|Uphill|No|Try|We|Lots|Plus)\b)/g, '$1\u0001')
+     .split('\u0001').map(x => x.trim()).filter(Boolean).forEach(x => out.push(x));
+  }
+  return out;
+}
+function pickRange(lo, hi){ return hi === undefined || isNaN(hi) ? lo : UPF.range === 'low' ? lo : UPF.range === 'high' ? hi : (lo + hi) / 2; }
+function inferSession(text, day){
+  const t = text.toLowerCase();
+  let sport = /^(rest|day off|off\b)|rest and recovery/.test(t) ? 'Rest'
+    : /x-train|cross[- ]?train|elliptical/.test(t) ? 'Other'
+    : /\b(bike|ride|cycl\w*|trainer|zwift|spin)\b/.test(t) ? 'Bike'
+    : /\bswim\w*\b/.test(t) ? 'Swim'
+    : /\b(lift\w*|strength|gym|weights)\b/.test(t) ? 'Strength'
+    : /\b(miles?|mi|km|run\w*|jog\w*|treadmill|tm|strides|track)\b/.test(t) ? 'Run' : 'Other';
+  let type = sport === 'Rest' ? 'Rest'
+    : /1-hour effort|threshold|tempo|\blt2?\b|mod\/hard|lactate|cruise/.test(t) ? 'Tempo'
+    : /\d+\s*x\s*\(?\s*\d|\bfast\b|vo2|interval|fartlek|sprint|\bhard\b/.test(t) ? 'Quality'
+    : /\brecovery\b/.test(t) && sport === 'Run' ? 'Recovery' : 'Easy';
+  const dm = /(\d+(?:\.\d+)?)(?:\s*(?:-|–|to)\s*(\d+(?:\.\d+)?))?\s*(miles?|mi|km|kilomet\w*)\b/.exec(t);
+  let miles = 0;
+  if (dm && sport !== 'Swim'){ const v = pickRange(+dm[1], dm[2] !== undefined ? +dm[2] : undefined); miles = /km|kilomet/.test(dm[3]) ? v / KM : v; }
+  let mins = 0;
+  const re = /(\d+(?:\.\d+)?)(?:\s*(?:-|–|to)\s*(\d+(?:\.\d+)?))?\s*(hours?|hrs?|minutes?|mins?|min)\b/g; let mm;
+  while ((mm = re.exec(t))){
+    if (/x\s*$/.test(t.slice(Math.max(0, mm.index - 3), mm.index))) continue;     // "6 x 3 min" is a rep, not the session length
+    const v = pickRange(+mm[1], mm[2] !== undefined ? +mm[2] : undefined);
+    mins = /h/.test(mm[3]) ? v * 60 : v; break;
+  }
+  const head = text.split(/\s+with\s+|,|\(|\.\s/)[0].trim();
+  const title = sport === 'Rest' ? 'Rest' : (head.length > 42 ? head.slice(0, 40).replace(/\s+\S*$/, '') + '…' : head) || `${type} ${sport.toLowerCase()}`;
+  const intensity = ({Quality:'Hard', Tempo:'Hard'})[type] || (/\bmod\b|easy\/mod/.test(t) ? 'Moderate' : 'Easy');
+  return {day, sport, type, intensity, title: title.charAt(0).toUpperCase() + title.slice(1), miles: Math.round(miles * 10) / 10, mins: Math.round(mins), swimDist: ''};
+}
+function parseGrid(rows, g, fileName){
+  const problems = [], warnings = [], sessions = [];
+  let fallbackWeek = 0, anyRange = false;
+  for (let i = g.row + 1; i < rows.length; i++){
+    const r = rows[i] || [], rn = i + 1;
+    const cells = Object.keys(g.dayCols).map(c => [+c, cleanText(r[+c])]).filter(([, v]) => v);
+    if (!cells.length) continue;                                   // spacer row
+    const wl = g.weekCol >= 0 ? /(\d+)/.exec(String(r[g.weekCol] ?? '')) : null;
+    const week = wl ? +wl[1] : ++fallbackWeek;
+    if (!wl && g.weekCol >= 0) warnings.push(`Row ${rn}: no week number, so it was read as week ${week}.`);
+    fallbackWeek = week;
+    for (const [c, text] of cells){
+      const day = g.dayCols[c];
+      if (/\d+\s*(?:-|–|to)\s*\d+\s*(miles?|mi|km|min|hours?)/i.test(text)) anyRange = true;
+      const steps = cellSteps(text);
+      const opt = steps.filter(x => /^optional\s+(easy\s+)?(x-train|cross|bike|ride|run|uphill|swim|walk|hike|jog)/i.test(x));
+      const main = steps.filter(x => !opt.includes(x));
+      const s0 = inferSession(main[0] || text, day);
+      sessions.push(Object.assign(s0, {row: rn, week, steps: main}));
+      opt.forEach(o => {
+        const so = inferSession(o.replace(/^optional\s+/i, ''), day);
+        sessions.push(Object.assign(so, {row: rn, week, steps: [o], optional: true, intensity: 'Easy', type: so.sport === 'Rest' ? 'Rest' : 'Easy', title: 'Optional: ' + so.title.replace(/^./, ch => ch.toLowerCase())}));
+      });
+    }
+  }
+  if (!sessions.length) return {fatal: 'We found a weekly grid but no training in it.'};
+  // The longest run of each week is the long run
+  const weeksN = Math.max(...sessions.map(x => x.week));
+  for (let w = 1; w <= weeksN; w++){
+    const runs = sessions.filter(x => x.week === w && x.sport === 'Run' && !x.optional && x.miles).sort((a, b) => b.miles - a.miles);
+    if (runs.length && (runs.length === 1 || runs[0].miles >= runs[1].miles * 1.25)){
+      const L = runs[0];
+      L.intensity = L.type === 'Tempo' ? 'Hard' : 'Moderate';     // a long run with a tempo inside is still the long run
+      L.type = 'Long';
+    }
+  }
+  const used = new Set(sessions.map(x => x.week)), empty = [];
+  for (let w = 1; w <= weeksN; w++) if (!used.has(w)) empty.push(w);
+  if (empty.length) warnings.push(`Week${empty.length > 1 ? 's' : ''} ${empty.join(', ')} ha${empty.length > 1 ? 've' : 's'} no sessions, so ${empty.length > 1 ? 'they' : 'it'} will show as rest.`);
+  const plan = {fileName, weeks: weeksN, sessions, strength: {}, problems, warnings, grid: true, ranges: anyRange};
+  plan.placement = placementWarnings(plan);
+  return plan;
+}
+// Tables from Markdown (Google Docs "Download → Markdown") or a .docx (Word / Google Docs "Download → .docx")
+function readMarkdownTables(text){
+  const rows = [];
+  for (const line of text.split(/\r?\n/)){
+    if (!/^\s*\|/.test(line)){ if (rows.length && rows[rows.length - 1].length) rows.push([]); continue; }
+    if (/^\s*\|(\s*:?-{2,}:?\s*\|)+\s*$/.test(line)) continue;      // separator row
+    const cells = []; let cur = '', esc2 = false;
+    for (const ch of line.trim().replace(/^\|/, '').replace(/\|$/, '')){
+      if (esc2){ cur += ch === '|' ? '|' : '\\' + ch; esc2 = false; continue; }
+      if (ch === '\\'){ esc2 = true; continue; }
+      if (ch === '|'){ cells.push(cur.trim()); cur = ''; } else cur += ch;
+    }
+    cells.push(cur.trim()); rows.push(cells);
+  }
+  return rows;
+}
+async function readDOCX(buf){
+  const z = await unzip(buf);
+  const x = await z.text('word/document.xml'); if (!x) throw new Error('That .docx has no document inside it.');
+  const doc = xmlDoc(x), W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const rows = [];
+  for (const tbl of doc.getElementsByTagNameNS(W, 'tbl')){
+    for (const tr of [...tbl.getElementsByTagNameNS(W, 'tr')].filter(n => n.parentNode === tbl)){
+      rows.push([...tr.getElementsByTagNameNS(W, 'tc')].filter(n => n.parentNode === tr).map(tc =>
+        [...tc.getElementsByTagNameNS(W, 'p')].map(p => [...p.getElementsByTagNameNS(W, 't')].map(t => t.textContent).join('')).join('\n').trim()));
+    }
+    rows.push([]);
+  }
+  if (!rows.length) throw new Error('That document has no tables in it.');
+  return rows;
+}
+
 // ---------- multisport placement checks (spec: Spreadsheet upload template) ----------
 function placementWarnings(plan){
   const out = [];
   const byDay = {};
-  plan.sessions.forEach(x => { if (x.sport !== 'Rest') (byDay[`${x.week}|${x.day}`] = byDay[`${x.week}|${x.day}`] || []).push(x); });
+  plan.sessions.forEach(x => { if (x.sport !== 'Rest' && !x.optional) (byDay[`${x.week}|${x.day}`] = byDay[`${x.week}|${x.day}`] || []).push(x); });
   const hardEnd = x => !['Strength','Other','Rest'].includes(x.sport) && x.intensity === 'Hard';
   const keyRun = x => x.sport === 'Run' && (x.type === 'Long' || x.type === 'Quality' || x.type === 'Tempo' || x.type === 'Race');
   for (let w = 1; w <= plan.weeks; w++){
@@ -1469,11 +1614,18 @@ function showUpload(){
   uploadMode = true; UP = null; UPF.error = '';
   drawUpload();
 }
+function gridPreview(res){
+  const w1 = res.sessions.filter(x => x.week === 1);
+  return `<p class="flag"><b>Read as a weekly grid.</b> We guessed each day's sport and type from its text. Check week 1:
+    <ul class="issues">${w1.map(x => `<li>${DAYS[x.day]}: ${esc(x.sport === 'Other' ? 'Cross-train/other' : x.sport)}${x.sport !== 'Rest' ? ' · ' + esc(x.type === 'Long' ? 'Long run' : x.type) : ''}${sessionLabel(x) ? ' · ' + esc(sessionLabel(x)) : ''}${x.optional ? ' (optional)' : ''}</li>`).join('')}</ul>
+    <span class="quiet">The full text of every day is kept. Guesses only drive colors, totals and scheduling notes.</span></p>`;
+}
 function drawUpload(){
   $('step').textContent = 'Your own plan';
   $('progress').innerHTML = '';
   const res = UP && !UP.fatal ? UP : null;
-  const total = res ? res.sessions.filter(x => x.sport !== 'Rest').length : 0;
+  const total = res ? res.sessions.filter(x => x.sport !== 'Rest' && !x.optional).length : 0;
+  const optN = res ? res.sessions.filter(x => x.optional).length : 0;
   const list = (arr, n = 8) => `<ul class="issues">${arr.slice(0, n).map(t => `<li>${esc(t)}</li>`).join('')}${arr.length > n ? `<li>…and ${arr.length - n} more</li>` : ''}</ul>`;
   $('screen').innerHTML = `<h1>Upload your plan</h1>
     <p class="lead">Fill in the template (one row per session), then upload it here. The file stays on your phone.</p>
@@ -1483,11 +1635,18 @@ function drawUpload(){
     <div class="card"><h3>2. Plan settings</h3>
       <label class="field">Week 1 starts <input type="date" data-ufield="start" value="${esc(UPF.start)}"></label>
       <div style="margin-top:10px">${['mi','km'].map(u => `<button type="button" class="choice" data-u="units" data-v="${u}" aria-pressed="${UPF.units === u}" style="display:inline-block;width:48%;margin-right:2%"><b>${u === 'mi' ? 'Miles' : 'Kilometers'}</b></button>`).join('')}</div>
+      ${UP && UP.ranges ? `<h3 style="margin-top:14px">This plan gives ranges (like 3–10 miles). Use the:</h3>
+        <div class="choices" style="grid-template-columns:repeat(3,1fr)">${[['low','Low end'],['mid','Middle'],['high','High end']].map(([v, l]) => `<button type="button" class="choice" data-u="range" data-v="${v}" aria-pressed="${UPF.range === v}"><b>${l}</b></button>`).join('')}</div>` : ''}
       <p class="quiet" style="margin:8px 0 0">Distances without a unit are read in ${UPF.units === 'mi' ? 'miles (swims in yards)' : 'kilometers (swims in meters)'}.</p></div>
     <div class="card"><h3>3. Upload</h3>
-      <label class="filebtn">${UPF.busy ? 'Reading…' : res ? 'Choose a different file' : 'Choose a file (.xlsx or .csv)'}<input type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+      <label class="filebtn">${UPF.busy ? 'Reading…' : res ? 'Choose a different file' : 'Choose a file'}<input type="file" accept=".xlsx,.csv,.docx,.md,.txt,text/csv,text/markdown,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
+      <p class="quiet" style="margin:6px 0 0">The template, any spreadsheet (.xlsx, .csv), or a plan written as a table in a document (.docx, or a Google Doc downloaded as Markdown).</p>
+      <details style="margin-top:10px"><summary class="quiet" style="cursor:pointer">Or paste a table</summary>
+        <textarea data-ufield="paste" rows="5" style="width:100%;margin-top:8px;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg)" placeholder="Paste rows copied from a spreadsheet">${esc(UPF.paste)}</textarea>
+        <button type="button" class="choice" data-u="paste" style="margin-top:6px"><b>Read pasted table</b></button></details>
       ${UPF.error ? `<p class="flag"><b>Couldn't read that file.</b> ${esc(UPF.error)}</p>` : ''}
-      ${res ? `<p style="margin:12px 0 0;font-size:15px"><b>${esc(res.fileName)}</b>: ${total} session${total === 1 ? '' : 's'} over ${res.weeks} week${res.weeks === 1 ? '' : 's'}${Object.keys(res.strength).length ? `, ${Object.keys(res.strength).length} strength sessions` : ''}.</p>
+      ${res ? `<p style="margin:12px 0 0;font-size:15px"><b>${esc(res.fileName)}</b>: ${total} session${total === 1 ? '' : 's'}${optN ? ` (+${optN} optional)` : ''} over ${res.weeks} week${res.weeks === 1 ? '' : 's'}${Object.keys(res.strength).length ? `, ${Object.keys(res.strength).length} strength sessions` : ''}.</p>
+        ${res.grid ? gridPreview(res) : ''}
         ${res.problems.length ? `<p class="flag"><b>${res.problems.length} row${res.problems.length > 1 ? 's' : ''} skipped</b>${list(res.problems)}</p>` : ''}
         ${res.warnings.length ? `<p class="flag"><b>${res.warnings.length} cell${res.warnings.length > 1 ? 's' : ''} fixed up</b>${list(res.warnings)}</p>` : ''}
         ${res.placement.length ? `<p class="flag"><b>${res.placement.length} scheduling note${res.placement.length > 1 ? 's' : ''}</b>${list(res.placement, 6)}</p>` : ''}
@@ -1501,12 +1660,19 @@ function drawUpload(){
 function uploadClick(e){
   const b = e.target.closest('[data-u]'); if (!b) return;
   if (b.dataset.u === 'template') downloadTemplate();
+  if (b.dataset.u === 'range'){ UPF.range = b.dataset.v; if (UPF.file) handleFile(UPF.file); return; }
+  if (b.dataset.u === 'paste'){ if (UPF.paste.trim()) handleFile({pasted: true, name: 'Pasted table', text: UPF.paste}); return; }
   if (b.dataset.u === 'units'){ UPF.units = b.dataset.v; if (UPF.file) handleFile(UPF.file); else drawUpload(); }
 }
 function uploadInput(e){
   if (e.target.dataset.ufield === 'start') UPF.start = e.target.value;
+  if (e.target.dataset.ufield === 'paste') UPF.paste = e.target.value;
 }
 let upSeq = 0;
+function pasteRows(text){
+  if (/^\s*\|/m.test(text)) return readMarkdownTables(text);
+  return readCSV(text);
+}
 async function handleFile(file){
   if (!file) return;
   const seq = ++upSeq;                               // ignore results from an older file that finishes later
@@ -1515,10 +1681,13 @@ async function handleFile(file){
   try {
     const name = file.name || 'plan';
     let sheets;
-    if (/\.csv$/i.test(name) || file.type === 'text/csv') sheets = {Plan: readCSV(await file.text())};
+    if (file.pasted) sheets = {Pasted: pasteRows(file.text)};
+    else if (/\.csv$/i.test(name) || file.type === 'text/csv') sheets = {Plan: readCSV(await file.text())};
     else if (/\.xlsx$/i.test(name)) sheets = await readXLSX(await file.arrayBuffer());
-    else if (/\.xls$/i.test(name) || /\.numbers$/i.test(name)) throw new Error('That format isn\'t supported. Save it as .xlsx or .csv and try again.');
-    else throw new Error('Upload an .xlsx or .csv file.');
+    else if (/\.docx$/i.test(name)) sheets = {Document: await readDOCX(await file.arrayBuffer())};
+    else if (/\.(md|markdown|txt)$/i.test(name) || /^text\//.test(file.type)) sheets = {Document: pasteRows(await file.text())};
+    else if (/\.(xls|numbers|pages|doc)$/i.test(name)) throw new Error('That format isn\'t supported. Save it as .xlsx, .csv, .docx or Markdown and try again.');
+    else throw new Error('Upload an .xlsx, .csv, .docx or Markdown (.md) file.');
     parsed = parseUpload(sheets, name);
     if (parsed.fatal){ error = parsed.fatal; parsed = null; }
   } catch (err){ error = err.message || 'Something went wrong reading the file.'; parsed = null; }
@@ -1596,11 +1765,11 @@ function buildCustomPlan(){
           const s = k >= 0 ? pool.splice(k, 1)[0] : null;
           if (s) steps = s.lines.concat(x.steps.filter(t => !/strength tab/i.test(t)));
         }
-        return {cls: SPORT_CLS[x.sport] || 'other', sport: x.sport, title: x.title, sub: sessionLabel(x), hint: x.sport === 'Strength' ? '' : `${x.type} · ${x.intensity}`, steps, x};
+        return {cls: SPORT_CLS[x.sport] || 'other', sport: x.sport, title: x.title, sub: sessionLabel(x), hint: x.optional ? 'Optional' : x.sport === 'Strength' ? '' : `${x.type} · ${x.intensity}`, steps, x};
       });
-      const main = list.find(x => !['Strength'].includes(x.sport));
-      const runMiles = list.filter(x => x.sport === 'Run').reduce((t, x) => t + x.miles, 0);
-      const load = list.filter(x => x.sport !== 'Strength').reduce((t, x) => t + (x.mins ? x.mins / 9 : x.sport === 'Bike' ? x.miles / 3 : x.sport === 'Swim' ? 3 : x.miles), 0);
+      const main = list.find(x => !['Strength'].includes(x.sport) && !x.optional) || list.find(x => !['Strength'].includes(x.sport));
+      const runMiles = list.filter(x => x.sport === 'Run' && !x.optional).reduce((t, x) => t + x.miles, 0);
+      const load = list.filter(x => x.sport !== 'Strength' && !x.optional).reduce((t, x) => t + (x.mins ? x.mins / 9 : x.sport === 'Bike' ? x.miles / 3 : x.sport === 'Swim' ? 3 : x.miles), 0);
       days.push({date, role: main ? (main.sport === 'Run' ? ROLE_OF[main.type] || 'E' : 'X') : 'off', title: main ? main.title : (list.length ? list[0].title : 'Rest'),
         miles: runMiles, load, sport: main ? main.sport : '', lift: list.some(x => x.sport === 'Strength') ? 'Strength' : null, items, hint: HINT.off, steps: []});
     }

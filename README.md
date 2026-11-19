@@ -80,7 +80,7 @@ It's a single-page web app with no build step and no dependencies.
 | `bb-icon-*.png`, `apple-touch-icon.png`, `favicon.ico` | Icons |
 | `RULES.md` | How plans are built, with references |
 
-**Updating:** after changing `index.html`, bump `CACHE` in `bb-sw.js` (for example `block-builder-v11` → `v12`) so phones pick up the new version.
+**Updating:** the app loads fresh from the network when online, so a merged change shows on the next open. Still bump `CACHE` in `bb-sw.js` (for example `block-builder-v15` → `v16`) and `APP_VERSION` in `index.html` so the offline copy and the version shown in the app stay in step.
 
 **Workflow:** changes go on a branch, get opened as a pull request, and are merged into `main`. GitHub Pages publishes `main` automatically.
 

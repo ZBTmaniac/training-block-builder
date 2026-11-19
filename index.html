@@ -1278,7 +1278,7 @@ function drawPlan(){
     <details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
       <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul>
       ${!P.custom && (P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}</details>
-    <p class="quiet" style="margin:0 0 12px"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a></p>
+    <p class="quiet" style="margin:0 0 12px"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a> · Version ${APP_VERSION}</p>
     <details class="card notes"><summary>All weeks</summary><table class="overview">${overview}</table></details>
     <div class="card" id="missed" style="margin-top:16px">${missedPanel()}</div>
     ${icuCard()}
@@ -2379,7 +2379,12 @@ function exportXLSX(){
 
 if (A.built) showPlan(); else render();
 
+const APP_VERSION = '0.7.3';
 if ('serviceWorker' in navigator) {
+  // When a new version takes over, reload once so the page matches it
+  const hadController = !!navigator.serviceWorker.controller;   // first visit: nothing to refresh
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded){ reloaded = true; location.reload(); } });
   window.addEventListener('load', () => navigator.serviceWorker.register("bb-sw.js").catch(() => {}));
 }
 </script>

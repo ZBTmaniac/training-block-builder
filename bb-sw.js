@@ -1,6 +1,6 @@
 // Bump this version whenever you upload a new index.html
-const CACHE = 'block-builder-v10';
-const FILES = ['./', './index.html', './bb-manifest.json', './bb-icon-180.png', './bb-icon-512.png'];
+const CACHE = 'block-builder-v11';
+const FILES = ['./', './index.html', './bb-manifest.json', './bb-icon-180.png', './bb-icon-192.png', './bb-icon-512.png', './apple-touch-icon.png', './favicon.ico'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

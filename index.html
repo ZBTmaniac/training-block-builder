@@ -133,6 +133,20 @@ details.day summary::-webkit-details-marker{display:none}
 .goal.goal-amb{border-left-color:var(--lift)}
 .goal.goal-big{border-left-color:#B3261E}
 .overview button{border:none;background:none;color:var(--run);cursor:pointer;font:inherit;padding:0}
+#print{display:none}
+@media print{
+  @page{margin:12mm}
+  body{background:#fff;color:#000;font-size:10pt}
+  body::before{display:none}
+  main > section, nav{display:none!important}
+  #print{display:block!important}
+  #print h1{font-size:20pt;margin:0 0 4pt}
+  #print h2{font-size:12pt;margin:12pt 0 4pt;break-after:avoid}
+  #print table{width:100%;border-collapse:collapse;break-inside:auto}
+  #print td,#print th{border-bottom:0.5pt solid #bbb;padding:3pt 4pt;vertical-align:top;text-align:left}
+  #print tr{break-inside:avoid}
+  #print .muted{color:#555}
+}
 </style>
 </head>
 <body>
@@ -145,6 +159,7 @@ details.day summary::-webkit-details-marker{display:none}
   </section>
   <section id="plan" hidden></section>
 </main>
+<div id="print"></div>
 <nav class="bar" id="quizbar"><div>
   <button id="back">Back</button>
   <button id="next" class="primary">Next</button>
@@ -159,7 +174,8 @@ const DEFAULTS = {
   benchKind:'race', benchDist:'5K', benchTime:{h:'',m:'',s:''}, goalTime:{h:'',m:'',s:''},
   days:null, longDay:'Sat', qualityDay:'Tue',
   strength:null, equipment:null,
-  expert:false, ackTough:false
+  expert:false, ackTough:false,
+  lthr:'', lthrSource:'test', effort:'pace'
 };
 let A = load();
 let idx = 0;
@@ -269,8 +285,16 @@ const SCREENS = [
       </div>
       <div class="card"><h3>Goal time <span class="quiet">(optional)</span></h3>
       <p class="sub">We'll tell you how it compares with where your fitness is likely to be on race day.</p>
-      <label class="field">${esc(A.distance||'Race')} goal ${timeInputs('goalTime')}</label></div>`,
+      <label class="field">${esc(A.distance||'Race')} goal ${timeInputs('goalTime')}</label></div>
+      <div class="card"><h3>Threshold heart rate <span class="quiet">(optional)</span></h3>
+      <p class="sub">Lets the plan show heart-rate targets. A tested number is best; a watch estimate works too.</p>
+      <label class="field">Threshold HR (bpm) <input type="number" inputmode="numeric" data-field="lthr" value="${esc(A.lthr)}" placeholder="e.g. 171"></label>
+      ${A.lthr !== '' ? `<div style="margin-top:10px">${choices('lthrSource', [{v:'test',label:'Tested',sub:'Field or lab test'},{v:'watch',label:'Watch estimate',sub:'From your device'}], 'two')}</div>
+        ${A.lthrSource === 'watch' ? `<p class="flag"><b>Good enough to start.</b> For a better number: run a hard 30 min solo and average your HR over the last 20 min.</p>` : ''}
+        <h3 style="margin-top:14px">Show effort as</h3>${choices('effort', [{v:'pace',label:'Pace'},{v:'hr',label:'Heart rate'}], 'two')}` : ''}
+      </div>`,
     check: () => {
+      if (A.lthr !== '' && (isNaN(+A.lthr) || (!A.expert && (+A.lthr < 120 || +A.lthr > 210)))) return 'Threshold HR is usually between 120 and 210 bpm. Check the number, or leave it blank.';
       for (const n of ['benchTime','goalTime']) {
         const t = A[n];
         if ([t.m,t.s].some(v => v!=='' && (isNaN(+v) || +v>59)) || (t.h!=='' && isNaN(+t.h))) return 'Times use hours, minutes (0–59) and seconds (0–59).';
@@ -366,6 +390,7 @@ function reviewRows(){
     ['Start', A.startDate, 2],
     ['Benchmark', bench, 3],
     ['Goal time', fmtTime(A.goalTime), 3],
+    ['Threshold HR', A.lthr !== '' ? `${A.lthr} bpm${A.lthrSource === 'watch' ? ' (watch)' : ''}, show ${A.effort === 'hr' ? 'HR' : 'pace'}` : '—', 3],
     ['Run days', `${A.days} per week`, 4],
     ['Long run / hard day', `${A.longDay} / ${A.qualityDay}`, 4],
     ['Strength', +A.strength ? `${A.strength}× per week, ${eq}` : 'None', 5]
@@ -418,7 +443,7 @@ $('screen').addEventListener('input', e => {
 });
 $('screen').addEventListener('change', e => {
   // redraw for fields that change what the screen shows
-  if (['raceDate','startDate','benchDist'].includes(e.target.dataset.field)) rerender();
+  if (['raceDate','startDate','benchDist','lthr'].includes(e.target.dataset.field)) rerender();
 });
 
 $('next').addEventListener('click', () => {
@@ -619,9 +644,21 @@ function fmtPace(sPerMi){
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '/' + A.units;
 }
 let Z = null;   // set per plan build
+// Heart-rate targets as % of threshold HR. Short, fast reps have none: HR lags behind the effort.
+const HR_PCT = {E:[0, 0.89], steady:[0.87, 0.91], MP:[0.89, 0.93], HM:[0.93, 0.97], T:[0.95, 1.0], '10K':[0.99, 1.02], '5K':null, R:null};
+function lthrVal(){ const v = +A.lthr; return A.lthr !== '' && v > 0 ? v : 0; }
+function hrText(key){
+  const l = lthrVal(); if (!l) return '';
+  const k = key === 'race' ? {'5K':'5K', '10K':'10K', 'Half':'HM', 'Full':'MP'}[A.distance] : key;
+  const r = HR_PCT[k]; if (!r) return '';
+  return r[0] === 0 ? `under ${Math.round(l * r[1])} bpm` : `${Math.round(l * r[0])}–${Math.round(l * r[1])} bpm`;
+}
 function at(key){
   const rpe = key === 'race' ? {'5K':'8–9', '10K':'8', 'Half':'6–7', 'Full':'5–6'}[A.distance] : ZONE_RPE[key];
   const label = key === 'race' && Z && Z.raceProj ? 'projected race pace' : ZONE_LABEL[key];
+  const useHR = lthrVal() && (A.effort === 'hr' || !Z);
+  const hr = useHR ? hrText(key) : '';
+  if (hr) return `at ${label} (${hr}, RPE ${rpe})`;
   return Z ? `at ${label} (${fmtPace(Z[key])}, RPE ${rpe})` : `at ${label} (RPE ${rpe})`;
 }
 
@@ -1027,6 +1064,8 @@ function noteList(){
     ? `Some weeks come up about ${fmtDist(N.addDay)} short of this plan's target, because long runs and single runs are capped. Adding one more easy run day would cover it.`
     : `Some weeks come up about ${fmtDist(N.addDay)} short of this plan's target because runs are capped. That's fine; the caps protect you.`);
   if (N.share) out.push('Your long run is more than 40% of some weeks. Adding a short run or a midweek medium-long run would spread the load.');
+  if (lthrVal() && A.lthrSource === 'watch') out.push('Your threshold HR is a watch estimate. A field test (hard 30 min solo, average HR over the last 20 min) will make your HR targets more accurate.');
+  if (lthrVal() && A.effort === 'hr') out.push('Short, fast reps show pace or RPE instead of HR, because heart rate lags behind the effort on short intervals.');
   if (A.benchKind === 'aspire') out.push('Your paces come from a best-guess time. Run a time trial in week 3 or 4 to check them.');
   out.push('Not medical advice. Listen to your body and adjust.');
   return out;
@@ -1075,10 +1114,16 @@ function drawPlan(){
       <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul>
       ${(P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}</details>
     <details class="card notes"><summary>All weeks</summary><table class="overview">${overview}</table></details>
+    <div class="card" id="missed" style="margin-top:16px">${missedPanel()}</div>
+    <div class="card"><h3>Take your plan with you</h3>
+      <div class="planbtns" style="margin-top:8px"><button id="xics">Calendar</button><button id="xpdf">PDF</button><button id="xxlsx">Excel</button></div>
+      <p class="quiet" style="margin:8px 0 0">Calendar adds sessions from today on as all-day events. PDF opens the print view: choose Save as PDF, or on iPhone tap Share → Print, then Share again to save the PDF.</p></div>
     <div class="planbtns"><button id="editans">Edit answers</button></div>`;
   $('pprev').onclick = () => { if (wk > 0){ wk--; drawPlan(); } };
   $('pnext').onclick = () => { if (wk < P.N - 1){ wk++; drawPlan(); } };
   $('editans').onclick = showQuiz;
+  $('xics').onclick = exportICS; $('xpdf').onclick = exportPDF; $('xxlsx').onclick = exportXLSX;
+  $('missed').onclick = missedClick;
   if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
   $('plan').querySelectorAll('[data-week]').forEach(b => b.onclick = () => { wk = +b.dataset.week; drawPlan(); window.scrollTo(0, 0); });
 }
@@ -1105,6 +1150,203 @@ function liftHint(t){
   if (t.includes('power')) return `${eq}. Fast, springy work for running power. Fresh legs matter more than fatigue here.`;
   if (t.includes('maintenance')) return `${eq}. One short session to hold your strength without adding fatigue.`;
   return `${eq}. Moderate effort, finish feeling like you had more in the tank.`;
+}
+
+// =====================================================================
+// MISSED TRAINING
+// =====================================================================
+let MS = {amount:null, why:null};
+function curWeekIdx(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.min(Math.max(Math.floor((today - parseDate(A.startDate)) / (7 * 864e5)), 0), P.N - 1);
+}
+function keyOf(W, role){ return W ? W.days.find(d => d.role === role) : null; }
+function missedNote(){
+  const cur = curWeekIdx();
+  const mi = MS.amount === 'days' ? cur : Math.max(0, cur - 1);
+  const M = P.weeks[mi], C = P.weeks[cur];
+  const mL = keyOf(M, 'L'), mQ = keyOf(M, 'Q'), cT = keyOf(C, 'T'), cL = keyOf(C, 'L');
+  const big = MS.amount === 'more' || MS.why === 'sick';
+  const p = [];
+  if (big){
+    p.push(MS.why === 'sick' ? '<b>Get healthy first.</b> Come back with a couple of easy runs before anything hard. If you were sick, wait until you\'ve been symptom-free for a day or two.' : '<b>Step back before stepping up.</b> After two or more weeks off, your body needs a short re-entry.');
+    p.push('The best move is to rebuild the plan from next week, starting a bit below where you left off. That way you don\'t jump straight back into your old volume.');
+    p.push('<b>Don\'t</b> try to make up the missed sessions. They\'re gone, and that\'s fine.');
+    return p;
+  }
+  if (MS.amount === 'days'){
+    p.push('<b>A few missed days won\'t dent your fitness.</b> Pick up wherever the plan is today.');
+    if (mQ) p.push(`If you missed this week's <b>${esc(mQ.title.toLowerCase())}</b>, move it to your next easy day, as long as that isn't the day before your long run.`);
+    p.push('<b>Don\'t</b> add the missed miles on top.');
+    return p;
+  }
+  const building = [mL ? `a long run of ${fmtDist(mL.miles)}` : '', mQ && mQ.title !== mL?.title ? esc(mQ.title.toLowerCase()) : ''].filter(Boolean).join(' and ');
+  p.push(`<b>You missed week ${mi + 1} (${PHASE_NAME[M.phase]}).</b>${building ? ` It was building toward ${building}.` : ''}`);
+  if (mQ && cT && cur !== mi && mQ.title !== keyOf(C, 'Q')?.title) p.push(`<b>This week:</b> carry on as planned, but swap ${DAYS[(cT.date.getDay() + 6) % 7]}'s ${esc(cT.title.toLowerCase())} for the ${esc(mQ.title.toLowerCase())} you missed.`);
+  else p.push('<b>This week:</b> carry on as planned.');
+  if (mL && cL && cL.miles >= mL.miles) p.push(`Skip the missed long run. This week's (${fmtDist(cL.miles)}) covers it.`);
+  else if (mL) p.push('Skip the missed long run. Run this week\'s as written.');
+  p.push('<b>Don\'t</b> add the missed miles on top. One good week beats one crammed week.');
+  return p;
+}
+function missedPanel(){
+  const opt = (k, v, label) => `<button type="button" class="choice" data-ms="${k}" data-v="${v}" aria-pressed="${MS[k] === v}"><b>${label}</b></button>`;
+  let h = `<h3>Missed some training?</h3>
+    <p class="sub">Life happens. Tell us what you missed and we'll adjust.</p>
+    <div class="choices" style="grid-template-columns:repeat(3,1fr)">${opt('amount','days','A few days')}${opt('amount','week','About a week')}${opt('amount','more','2+ weeks')}</div>
+    <div class="choices two" style="margin-top:8px">${opt('why','busy','Life got busy')}${opt('why','sick','Sick or hurt')}</div>`;
+  if (MS.amount && MS.why){
+    h += `<div style="margin-top:12px;font-size:15px">${missedNote().map(t => `<p style="margin:0 0 8px">${t}</p>`).join('')}</div>`;
+    if (MS.amount !== 'days' || MS.why === 'sick'){
+      const race = A.timeline === 'race';
+      h += `<div class="planbtns" style="margin-top:4px"><button id="pushback">${race ? 'Rebuild from next week' : 'Push plan back'}</button></div>
+        <p class="quiet" style="margin:6px 0 0">${race ? 'Your race date stays fixed, so the rebuilt plan keeps your full taper and shortens the earlier phases instead.' : `Moves every remaining session back ${MS.amount === 'more' ? 'two weeks' : 'a week'}.`}</p>`;
+    }
+  }
+  return h;
+}
+function missedClick(e){
+  const b = e.target.closest('[data-ms]');
+  if (b){ MS[b.dataset.ms] = b.dataset.v; $('missed').innerHTML = missedPanel(); return; }
+  if (e.target.id === 'pushback') pushBack();
+}
+function pushBack(){
+  const big = MS.amount === 'more' || MS.why === 'sick';
+  if (A.timeline !== 'race'){
+    A.startDate = iso(addDays(parseDate(A.startDate), MS.amount === 'more' ? 14 : 7));
+  } else {
+    const cur = curWeekIdx();
+    const last = P.weeks[Math.max(0, cur - (MS.amount === 'days' ? 0 : 1) - 1)] || P.weeks[0];
+    const newStart = nextMonday();
+    const weeksLeft = Math.floor((parseDate(A.raceDate) - parseDate(newStart)) / (7 * 864e5)) + 1;
+    if (weeksLeft < 2){ alertMsg('There isn\'t enough time before your race to rebuild. Run easy, keep your long run short, and race for fun.'); return; }
+    const vol = last.total * (big ? (MS.amount === 'more' ? 0.7 : 0.8) : 0.95);
+    A.volume = String(Math.round((A.units === 'km' ? vol * KM : vol) * 2) / 2);
+    A.startDate = newStart;
+  }
+  MS = {amount:null, why:null}; A.ackTough = true; save(); showPlan();
+}
+function alertMsg(t){ const el = $('missed'); el.insertAdjacentHTML('beforeend', `<p class="flag" style="margin-top:8px">${esc(t)}</p>`); }
+
+// =====================================================================
+// EXPORTS
+// =====================================================================
+function download(blob, name){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+const ymd = d => d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+function sessionRows(){
+  const rows = [];
+  P.weeks.forEach((W, wi) => W.days.forEach(d => {
+    if (!d.miles && !d.lift && d.role === 'off') return;
+    rows.push({W, wi, d});
+  }));
+  return rows;
+}
+// ---------- calendar (.ics) ----------
+function icsEsc(t){ return String(t).replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\n/g, '\\n'); }
+function icsFold(line){
+  const enc = new TextEncoder(); const out = []; let cur = '', bytes = 0;
+  for (const ch of line){
+    const b = enc.encode(ch).length;
+    if (bytes + b > (out.length ? 74 : 75)){ out.push(cur); cur = ''; bytes = 0; }
+    cur += ch; bytes += b;
+  }
+  out.push(cur);
+  return out.join('\r\n ');
+}
+function exportICS(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Training Block Builder//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEsc(`${A.distance} training plan`)];
+  sessionRows().forEach(({wi, d}, i) => {
+    if (d.date < today) return;
+    const summary = [d.miles ? `${d.title} · ${fmtDist(d.miles)}` : '', d.lift ? d.lift : ''].filter(Boolean).join(' + ');
+    const desc = [d.miles ? (d.steps || []).map(x => '• ' + x).join('\n') : '', d.lift ? d.lift + ':\n' + (d.liftSteps || []).map(x => '• ' + x).join('\n') : '', `Week ${wi + 1} of ${P.N}`].filter(Boolean).join('\n\n');
+    L.push('BEGIN:VEVENT', `UID:tbb-${ymd(d.date)}-${i}@training-block-builder`, 'DTSTAMP:' + stamp,
+      'DTSTART;VALUE=DATE:' + ymd(d.date), 'DTEND;VALUE=DATE:' + ymd(addDays(d.date, 1)),
+      icsFold('SUMMARY:' + icsEsc(summary)), icsFold('DESCRIPTION:' + icsEsc(desc)), 'TRANSP:TRANSPARENT', 'END:VEVENT');
+  });
+  L.push('END:VCALENDAR');
+  download(new Blob([L.join('\r\n') + '\r\n'], {type:'text/calendar'}), `${A.distance}-training-plan.ics`);
+}
+// ---------- PDF (print view) ----------
+function exportPDF(){
+  const fmt = d => d.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'});
+  $('print').innerHTML = `<h1>${esc(A.distance)} training plan</h1>
+    <p class="muted">${P.N} weeks · starts ${esc(A.startDate)}${A.timeline === 'race' ? ' · race ' + esc(A.raceDate) : ''} · Not medical advice.</p>` +
+    P.weeks.map((W, wi) => `<h2>Week ${wi + 1}: ${PHASE_NAME[W.phase]} · ${fmtDist(W.total)}</h2><table>
+      ${W.days.map(d => `<tr><td style="width:18%">${fmt(d.date)}</td><td style="width:30%"><b>${esc(d.title)}</b>${d.miles ? ' · ' + fmtDist(d.miles) : ''}${d.lift ? `<br><span class="muted">${esc(d.lift)}</span>` : ''}</td>
+        <td>${(d.steps || []).map(esc).join('<br>')}${d.lift ? `<br><span class="muted">${(d.liftSteps || []).map(esc).join('; ')}</span>` : ''}</td></tr>`).join('')}</table>`).join('');
+  window.print();
+}
+// ---------- Excel (.xlsx, written by hand: a zip of a few XML files) ----------
+function crc32(buf){
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++){
+    let c = (crc ^ buf[i]) & 0xFF;
+    for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xEDB88320 : c >>> 1;
+    crc = (crc >>> 8) ^ c;
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function zipStore(files, type){
+  const enc = new TextEncoder(); const parts = [], central = []; let offset = 0;
+  for (const f of files){
+    const name = enc.encode(f.name), data = enc.encode(f.data), crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint16(8, 0, true); lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true);
+    lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(10, 0, true); ch.setUint16(12, 0, true); ch.setUint16(14, 0x21, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true);
+    ch.setUint16(28, name.length, true); ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((t, a) => t + a.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], {type});
+}
+const xmlEsc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+function colName(i){ let s = ''; i++; while (i){ const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+function sheetXML(rows){
+  const body = rows.map((r, ri) => `<row r="${ri + 1}">` + r.map((v, ci) => {
+    const ref = colName(ci) + (ri + 1);
+    if (typeof v === 'number') return `<c r="${ref}"${ri === 0 ? ' s="1"' : ''}><v>${v}</v></c>`;
+    return `<c r="${ref}" t="inlineStr"${ri === 0 ? ' s="1"' : ''}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+  }).join('') + '</row>').join('');
+  const widths = [8, 10, 12, 8, 8, 10, 26, 10, 60, 22, 60];
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${body}</sheetData></worksheet>`;
+}
+function exportXLSX(){
+  const unit = A.units;
+  const typeName = r => ({Q:'Quality', T:'Tempo', L:'Long', E:'Easy', R:'Recovery', RACE:'Race', off:'Rest'})[r] || 'Easy';
+  const intensity = r => ({Q:'Hard', T:'Hard', L:'Moderate', RACE:'Hard'})[r] || 'Easy';
+  const rows = [['Week', 'Phase', 'Date', 'Day', 'Sport', 'Type', 'Title', `Distance (${unit})`, 'Details', 'Strength', 'Strength details']];
+  P.weeks.forEach((W, wi) => W.days.forEach(d => {
+    const dist = d.miles ? Math.round((unit === 'km' ? d.miles * KM : d.miles) * 2) / 2 : '';
+    rows.push([wi + 1, PHASE_NAME[W.phase], iso(d.date), DAYS[(d.date.getDay() + 6) % 7], d.miles ? 'Run' : 'Rest',
+      d.miles ? typeName(d.role) : 'Rest', d.title, dist, (d.steps || []).join(' | '), d.lift || '', (d.liftSteps || []).join(' | ')]);
+  }));
+  const files = [
+    {name:'[Content_Types].xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
+    {name:'_rels/.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {name:'xl/workbook.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Plan" sheetId="1" r:id="rId1"/></sheets></workbook>'},
+    {name:'xl/_rels/workbook.xml.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+    {name:'xl/styles.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'},
+    {name:'xl/worksheets/sheet1.xml', data:sheetXML(rows)}
+  ];
+  download(zipStore(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'), `${A.distance}-training-plan.xlsx`);
 }
 
 if (A.built) showPlan(); else render();

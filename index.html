@@ -772,6 +772,92 @@ function workoutSteps(d, phase, f, k, pace){
   return [];
 }
 
+// ---------- structured workouts (for watch files) ----------
+// A step: {kind: warmup|active|recovery|rest|cooldown, dur: {s}|{m}|{open}, zone, name}; a repeat: {repeat: n, steps: [...]}.
+// Mirrors workoutSteps() so the watch file and the written steps match.
+const MI_M = 1609.344;
+function workoutStruct(d, phase, f, k, pace){
+  if (!d.miles || ['off'].includes(d.role)) return null;
+  const D = A.distance, lvl = A.experience, short = D === '5K' || D === '10K';
+  const n = (lo, hi) => Math.round(lo + (hi - lo) * f);
+  const fit = (reps, repMi) => Math.max(2, Math.min(reps, Math.floor(0.6 * d.miles / repMi)));
+  const fitMin = (reps, min) => fit(reps, min / (pace * 0.8));
+  const T = (s, zone, kind = 'active', name = '') => ({kind, dur: {s: Math.round(s)}, zone, name});
+  const M = (m, zone, kind = 'active', name = '') => ({kind, dur: {m: Math.round(m)}, zone, name});
+  const MI = (mi, zone, kind = 'active', name = '') => M(mi * MI_M, zone, kind, name);
+  const O = (zone, kind, name) => ({kind, dur: {open: 1}, zone, name});
+  const R = (times, ...steps) => ({repeat: times, steps});
+  const WU = T(900, 'E', 'warmup', 'Warm up');
+  const CD = O('E', 'cooldown', 'Cool down (lap to end)');
+  const strides = c => R(c, T(20, null, 'active', 'Stride'), T(60, null, 'recovery', 'Walk or jog'));
+  const easyAll = (name = 'Easy') => MI(d.miles, 'E', 'active', name);
+  switch (d.kind){
+    case 'E': return d.strides ? [MI(Math.max(0.5, d.miles - 0.3), 'E', 'active', 'Easy'), strides(6)] : [easyAll()];
+    case 'R': return [easyAll('Recovery, slower than easy')];
+    case 'MLR': return [easyAll('Medium-long, easy')];
+    case 'SH': return [T(1050, 'E', 'active', 'Very easy'), strides(4)];
+    case 'TT': return [WU, M((D === 'Full' || D === 'Half' ? 6.214 : DIST_MI[D]) * MI_M, 'race', 'active', 'Time trial'), T(600, 'E', 'cooldown', 'Cool down')];
+    case 'RACE': return [MI(DIST_MI[D], 'race', 'active', 'Race')];
+    case 'Q': {
+      if (phase === 'base'){
+        if (lvl === 'new') return [MI(Math.max(0.5, d.miles - 0.3), 'E', 'active', 'Easy'), strides(5)];
+        return k % 2 ? [WU, R(n(6, 10), T(30, null, 'active', 'Hill sprint'), T(90, null, 'recovery', 'Walk down')), CD]
+                     : [WU, R(n(6, 10), T(60, '10K', 'active', 'Fartlek'), T(60, 'E', 'recovery', 'Easy')), CD];
+      }
+      if (phase === 'taper') return [WU, short ? R(n(4, 6), M(400, 'race'), T(120, 'E', 'recovery')) : R(3, M(1000, 'race'), T(120, 'E', 'recovery')), CD];
+      if (lvl === 'new') return [WU, R(n(5, 8), T(90, null, 'active', 'Comfortably hard'), T(120, 'E', 'recovery')), CD];
+      if (phase === 'peak' && D === '5K') return [WU, R(fit(n(8, 12), 0.25), M(400, 'race'), M(200, 'E', 'recovery')), CD];
+      if (phase === 'peak' && D === '10K') return [WU, R(fit(n(4, 6), 0.62), M(1000, 'race'), M(400, 'E', 'recovery')), CD];
+      const ff = phase === 'peak' ? 1 : f, m = (lo, hi) => Math.round(lo + (hi - lo) * ff);
+      if (short) return [WU, lvl === 'regular' ? R(fit(m(5, 6), 0.62), M(1000, '5K'), T(150, 'E', 'recovery')) : R(fit(m(5, 6), 0.5), M(800, '5K'), M(400, 'E', 'recovery')), CD];
+      return [WU, lvl === 'regular' ? R(fit(m(4, 6), 1), M(1600, '10K'), T(150, 'E', 'recovery')) : R(fit(m(6, 8), 0.5), M(800, '10K'), M(400, 'E', 'recovery')), CD];
+    }
+    case 'T': {
+      if (phase === 'taper') return [MI(Math.max(0.5, d.miles - 0.3), 'E', 'active', 'Easy'), strides(5)];
+      if (phase === 'base'){
+        if (lvl === 'new') return [easyAll()];
+        const st = n(15, 25);
+        return [MI(d.miles / 2, 'E', 'active', 'Easy'), T(st * 60, 'steady', 'active', 'Steady'), O('E', 'cooldown', 'Easy to finish')];
+      }
+      if (phase === 'peak'){
+        if (short) return [WU, lvl === 'new' ? R(n(2, 3), T(300, 'T'), T(120, 'E', 'recovery')) : R(fit(n(4, 5), 1), M(1600, 'T', 'active', 'Cruise'), T(60, null, 'rest', 'Rest')), CD];
+        if (D === 'Half') return [WU, lvl === 'new' ? R(2, MI(1.5, 'race'), T(180, 'E', 'recovery')) : R(fit(n(2, 3), 2.5), MI(2, 'race'), M(800, 'steady', 'recovery', 'Float')), CD];
+        const st = n(15, 20);
+        return [MI(Math.max(1, d.miles - st / (pace * 0.92)), 'E', 'active', 'Easy'), T(st * 60, 'steady', 'active', 'Steady')];
+      }
+      if (lvl === 'new') return [WU, R(n(2, 3), T(300, 'T'), T(120, 'E', 'recovery')), CD];
+      if (lvl === 'some') return [WU, R(fitMin(n(3, 4), 8), T(360, 'T', 'active', 'Threshold'), T(120, 'steady', 'recovery', 'Float, keep moving')), CD];
+      return [WU, R(fitMin(n(3, 5), 10), T(480, 'T', 'active', 'Threshold'), T(120, 'steady', 'recovery', 'Float, keep moving')), CD];
+    }
+    case 'L': {
+      if (phase !== 'peak') return [easyAll('Long run, easy')];
+      if (D === 'Full'){
+        if (lvl === 'new') return [MI(Math.max(1, d.miles - 3), 'E', 'active', 'Easy'), MI(3, 'race', 'active', 'Goal pace')];
+        if (lvl === 'some') return [MI(Math.max(1, d.miles - 7), 'E', 'active', 'Easy'), R(2, MI(3, 'race', 'active', 'Goal pace'), MI(1, 'E', 'recovery', 'Easy')), O('E', 'cooldown', 'Easy to finish')];
+        const mp = n(8, 12);
+        return [MI(Math.max(1, (d.miles - mp) / 2), 'E', 'active', 'Easy'), MI(mp, 'race', 'active', 'Goal pace'), O('E', 'cooldown', 'Easy to finish')];
+      }
+      if (D === 'Half' && lvl !== 'new'){ const ff = n(2, 3); return [MI(Math.max(1, d.miles - ff), 'E', 'active', 'Easy'), MI(ff, 'race', 'active', 'Goal pace')]; }
+      return [easyAll('Long run, easy')];
+    }
+  }
+  return null;
+}
+// Target for a zone: pace range (sec/mi, slow..fast) or HR range, matching what the text shows
+function zoneTarget(zone){
+  if (!zone) return null;
+  const l = lthrVal();
+  const useHR = l && (A.effort === 'hr' || !Z);
+  if (useHR){
+    const k = zone === 'race' ? {'5K':'5K', '10K':'10K', 'Half':'HM', 'Full':'MP'}[A.distance] : zone;
+    const r = HR_PCT[k];
+    if (r) return {hr: [Math.round(l * (r[0] || 0.75)), Math.round(l * r[1])]};
+  }
+  if (!Z || !Z[zone]) return null;
+  const p = Z[zone];
+  return zone === 'E' ? {pace: [p * 1.08, p * 0.96]} : zone === 'steady' ? {pace: [p * 1.03, p * 0.97]} : {pace: [p * 1.02, p * 0.98]};
+}
+
 // ---------- strength templates ----------
 // Exercises: [name, prescription, swap]. Prescriptions with {rx} take the phase's heavy-lift dose.
 const LIFTS = {
@@ -1071,6 +1157,7 @@ function buildPlan(){
     const f = pCount[W.phase] > 1 ? (k - 1) / (pCount[W.phase] - 1) : 1;
     W.days.forEach(d => {
       d.steps = workoutSteps(d, W.phase, f, k, pace);
+      d.struct = workoutStruct(d, W.phase, f, k, pace);
       if (isHotRace() && raceDate){
         const toRace = Math.round((raceDate - d.date) / 864e5);
         if (toRace >= 8 && toRace <= 21 && ['E','R','MLR'].includes(d.kind))
@@ -1190,8 +1277,11 @@ function drawPlan(){
       ${!P.custom && (P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}</details>
     <details class="card notes"><summary>All weeks</summary><table class="overview">${overview}</table></details>
     <div class="card" id="missed" style="margin-top:16px">${missedPanel()}</div>
+    ${icuCard()}
     <div class="card"><h3>Take your plan with you</h3>
       <div class="planbtns" style="margin-top:8px"><button id="xics">Calendar</button><button id="xpdf">PDF</button><button id="xxlsx">Excel</button></div>
+      ${P.custom ? '' : `<div class="planbtns" style="margin-top:8px"><button id="xfit">Watch files (.fit)</button><button id="xzwo">TrainingPeaks/Zwift (.zwo)</button></div>`}
+      <p id="watchmsg" class="flag" hidden></p>
       <p class="quiet" style="margin:8px 0 0">Calendar adds sessions from today on as all-day events. PDF opens the print view: choose Save as PDF, or on iPhone tap Share → Print, then Share again to save the PDF.</p></div>
     ${P.custom ? `<div class="planbtns"><button id="reupload">Upload a different plan</button><button id="makegen">Build a plan for me</button></div>`
                : `<div class="planbtns"><button id="editans">Edit answers</button><button id="toupload">Upload my own</button></div>`}`;
@@ -1201,6 +1291,9 @@ function drawPlan(){
   if ($('toupload')) $('toupload').onclick = () => showQuiz('upload');
   if ($('reupload')) $('reupload').onclick = () => showQuiz('upload');
   if ($('makegen')) $('makegen').onclick = () => showQuiz('gen');
+  if ($('xfit')) $('xfit').onclick = () => exportWatch('fit');
+  if ($('xzwo')) $('xzwo').onclick = () => exportWatch('zwo');
+  $('icusend').onclick = icuSend; $('icudel').onclick = icuRemove;
   $('xics').onclick = exportICS; $('xpdf').onclick = exportPDF; $('xxlsx').onclick = exportXLSX;
   $('missed').onclick = missedClick;
   if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
@@ -1843,6 +1936,200 @@ function dayItems(d){
 }
 function planName(){ return A.mode === 'upload' ? (A.custom && A.custom.fileName ? A.custom.fileName.replace(/\.[^.]+$/, '') : 'My plan') : `${A.distance} training plan`; }
 
+
+// =====================================================================
+// WATCH FILES: .fit workouts (Garmin, Coros, Intervals.icu), .zwo (TrainingPeaks, Zwift)
+// =====================================================================
+const FIT_CRC = [0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401, 0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400];
+function fitCrc(bytes, crc = 0){
+  for (const b of bytes){
+    let t = FIT_CRC[crc & 0xF]; crc = (crc >> 4) & 0x0FFF; crc = crc ^ t ^ FIT_CRC[b & 0xF];
+    t = FIT_CRC[crc & 0xF]; crc = (crc >> 4) & 0x0FFF; crc = crc ^ t ^ FIT_CRC[(b >> 4) & 0xF];
+  }
+  return crc;
+}
+// Flatten repeats into FIT steps: children first, then a "repeat from step i, n times" step
+function flatSteps(struct){
+  const out = [];
+  const walk = list => list.forEach(st => {
+    if (st.repeat){ const from = out.length; walk(st.steps); out.push({repeatFrom: from, times: st.repeat}); }
+    else out.push(st);
+  });
+  walk(struct);
+  return out;
+}
+function fitWorkout(name, struct){
+  const enc = new TextEncoder();
+  const bytes = [];
+  const u8 = v => bytes.push(v & 0xFF);
+  const u16 = v => { u8(v); u8(v >> 8); };
+  const u32 = v => { u16(v & 0xFFFF); u16((v >>> 16) & 0xFFFF); };
+  const str = (t, size) => { const b = enc.encode(t || ''); for (let i = 0; i < size; i++) u8(i < Math.min(b.length, size - 1) ? b[i] : 0); };
+  const ENUM = 0x00, U16 = 0x84, U32 = 0x86, STR = 0x07, U32Z = 0x8C;
+  const define = (local, global, fields) => { u8(0x40 | local); u8(0); u8(0); u16(global); u8(fields.length); fields.forEach(([num, size, type]) => { u8(num); u8(size); u8(type); }); };
+  // file_id
+  define(0, 0, [[0, 1, ENUM], [1, 2, U16], [2, 2, U16], [3, 4, U32Z], [4, 4, U32]]);
+  u8(0); u8(5); u16(255); u16(0); u32(Math.floor(Math.random() * 0xFFFFFFF) + 1); u32(Math.floor(Date.now() / 1000) - 631065600);
+  const steps = flatSteps(struct);
+  // workout
+  define(1, 26, [[4, 1, ENUM], [6, 2, U16], [8, 32, STR]]);
+  u8(1); u8(1); u16(steps.length); str(name, 32);
+  // workout_step
+  define(2, 27, [[254, 2, U16], [0, 24, STR], [1, 1, ENUM], [2, 4, U32], [3, 1, ENUM], [4, 4, U32], [5, 4, U32], [6, 4, U32], [7, 1, ENUM]]);
+  const INTENSITY = {active:0, rest:1, warmup:2, cooldown:3, recovery:4};
+  steps.forEach((st, i) => {
+    u8(2); u16(i);
+    if (st.repeatFrom !== undefined){
+      str('', 24); u8(6); u32(st.repeatFrom); u8(0xFF); u32(st.times); u32(0xFFFFFFFF); u32(0xFFFFFFFF); u8(0xFF);
+      return;
+    }
+    str(st.name, 24);
+    if (st.dur.s){ u8(0); u32(st.dur.s * 1000); }           // time, ms
+    else if (st.dur.m){ u8(1); u32(st.dur.m * 100); }       // distance, cm
+    else { u8(5); u32(0xFFFFFFFF); }                        // open: ends on lap press
+    const t = zoneTarget(st.zone);
+    if (t && t.pace){ u8(0); u32(0); u32(Math.round(MI_M / t.pace[0] * 1000)); u32(Math.round(MI_M / t.pace[1] * 1000)); }   // speed, mm/s
+    else if (t && t.hr){ u8(1); u32(0); u32(t.hr[0] + 100); u32(t.hr[1] + 100); }                                         // custom HR, bpm + 100
+    else { u8(2); u32(0xFFFFFFFF); u32(0xFFFFFFFF); u32(0xFFFFFFFF); }                                                     // open
+    u8(INTENSITY[st.kind] ?? 0);
+  });
+  const data = Uint8Array.from(bytes);
+  const header = new Uint8Array(14), hv = new DataView(header.buffer);
+  header[0] = 14; header[1] = 0x20; hv.setUint16(2, 2132, true); hv.setUint32(4, data.length, true);
+  header.set([46, 70, 73, 84], 8);                                                                                       // ".FIT"
+  hv.setUint16(12, fitCrc(header.subarray(0, 12)), true);
+  const crc = fitCrc(data, fitCrc(header));
+  const out = new Uint8Array(14 + data.length + 2);
+  out.set(header); out.set(data, 14); out[out.length - 2] = crc & 0xFF; out[out.length - 1] = crc >> 8;
+  return out;
+}
+// .zwo for runs: speeds as a fraction of 5K pace (pace="1"); distances converted to time at the step's pace
+function zwoWorkout(name, desc, struct){
+  if (!Z) return null;
+  const p5 = Z['5K'];
+  const frac = zone => zone && Z[zone] ? +(p5 / Z[zone]).toFixed(3) : +(p5 / Z.E).toFixed(3);
+  const secs = st => st.dur.s || (st.dur.m ? st.dur.m / MI_M * (st.zone && Z[st.zone] ? Z[st.zone] : Z.E) : 600);
+  const one = st => {
+    const tag = st.kind === 'warmup' ? 'Warmup' : st.kind === 'cooldown' ? 'Cooldown' : 'SteadyState';
+    const pw = frac(st.zone);
+    return tag === 'SteadyState' ? `<SteadyState Duration="${Math.round(secs(st))}" Power="${pw}" pace="1"/>`
+      : `<${tag} Duration="${Math.round(secs(st))}" PowerLow="${(pw * 0.9).toFixed(3)}" PowerHigh="${pw}" pace="1"/>`;
+  };
+  const body = struct.map(st => {
+    if (st.repeat && st.steps.length === 2 && !st.steps[0].repeat && !st.steps[1].repeat){
+      const [a, b] = st.steps;
+      return `<IntervalsT Repeat="${st.repeat}" OnDuration="${Math.round(secs(a))}" OffDuration="${Math.round(secs(b))}" OnPower="${frac(a.zone)}" OffPower="${frac(b.zone)}" pace="1"/>`;
+    }
+    if (st.repeat) return Array.from({length: st.repeat}, () => st.steps.map(one).join('')).join('');
+    return one(st);
+  }).join('\n    ');
+  return `<workout_file>\n  <author>Training Block Builder</author>\n  <name>${xmlEsc(name)}</name>\n  <description>${xmlEsc(desc)}</description>\n  <sportType>run</sportType>\n  <tags/>\n  <workout>\n    ${body}\n  </workout>\n</workout_file>\n`;
+}
+function watchSessions(fromToday){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const out = [];
+  P.weeks.forEach((W, wi) => W.days.forEach(d => {
+    if (!d.struct || (fromToday && d.date < today)) return;
+    const name = `W${wi + 1} ${DAYS[(d.date.getDay() + 6) % 7]} ${d.title}`.replace(/[^\w .:+-]/g, '').slice(0, 31);
+    out.push({d, wi, name, file: `${iso(d.date)}-${d.title.replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase()}`});
+  }));
+  return out;
+}
+function exportWatch(kind){
+  const list = watchSessions(true);
+  if (!list.length){ alertWatch(P.custom ? 'Uploaded plans don\'t have step-by-step targets, so there are no watch files to make. Calendar and Intervals.icu still work.' : 'No upcoming run workouts to export.'); return; }
+  const files = [];
+  list.forEach(({d, name, file}) => {
+    if (kind === 'fit') files.push({name: file + '.fit', data: fitWorkout(name, d.struct)});
+    else { const z = zwoWorkout(name, (d.steps || []).join(' | '), d.struct); if (z) files.push({name: file + '.zwo', data: z}); }
+  });
+  if (!files.length){ alertWatch('.zwo files need training paces. Add a recent race or time trial on the benchmark screen.'); return; }
+  files.push({name: 'README.txt', data: kind === 'fit'
+    ? 'Structured run workouts from Training Block Builder.\n\nGarmin: copy the .fit files to the watch\'s GARMIN/NewFiles folder over USB, or import them in Garmin Connect on the web where import is offered.\nIntervals.icu: drag them onto your calendar or into a workout library folder; Intervals.icu can send them to Garmin.\nCoros and others: use the app\'s workout import.\n'
+    : 'Structured run workouts from Training Block Builder (Zwift .zwo format).\n\nTrainingPeaks: Workout Library > folder menu > Import Workout (bulk import works).\nZwift: copy the files into Documents/Zwift/Workouts/<your Zwift ID>.\nPaces are relative to your 5K pace in Zwift.\n'});
+  download(zipStore(files, 'application/zip'), `${planName()}-${kind === 'fit' ? 'watch' : 'zwo'}-workouts.zip`.replace(/\s+/g, '-'));
+}
+function alertWatch(t){ const el = $('watchmsg'); if (el){ el.textContent = t; el.hidden = false; } }
+
+// =====================================================================
+// SEND TO INTERVALS.ICU (API key stays on this device; sent only to intervals.icu)
+// =====================================================================
+const ICU_KEY = 'tbb-icu-v1';
+function icuLoad(){ try { return JSON.parse(localStorage.getItem(ICU_KEY)) || {}; } catch(e){ return {}; } }
+function icuSave(v){ try { localStorage.setItem(ICU_KEY, JSON.stringify(v)); } catch(e){} }
+let ICU = icuLoad();
+function b64(bytes){ let s = ''; bytes.forEach(b => s += String.fromCharCode(b)); return btoa(s); }
+const ICU_TYPE = {Run:'Run', Bike:'Ride', Brick:'Ride', Swim:'Swim', Strength:'WeightTraining', Other:'Workout'};
+function icuEvents(weeks){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const end = addDays(today, weeks * 7);
+  const evs = [];
+  P.weeks.forEach((W, wi) => W.days.forEach(d => {
+    if (d.date < today || d.date >= end) return;
+    dayItems(d).forEach((it, i) => {
+      if (it.x && it.x.optional) return;
+      const date = iso(d.date) + 'T00:00:00';
+      const ev = {category: 'WORKOUT', start_date_local: date, type: ICU_TYPE[it.sport] || 'Run', name: it.title.slice(0, 80),
+        description: (it.steps || []).join('\n'), external_id: `tbb-${iso(d.date)}-${i}`};
+      if (it.sport === 'Run' && !it.x && d.struct){ ev.filename = 'workout.fit'; ev.file_contents_base64 = b64(fitWorkout(it.title.slice(0, 31), d.struct)); }
+      else if (it.x && it.x.mins) ev.moving_time = it.x.mins * 60;
+      evs.push(ev);
+    });
+  }));
+  return evs;
+}
+async function icuCall(path, method, body){
+  const r = await fetch('https://intervals.icu/api/v1/athlete/' + encodeURIComponent(ICU.athlete || '0') + path, {
+    method, headers: {'Authorization': 'Basic ' + btoa('API_KEY:' + ICU.key), 'Content-Type': 'application/json'}, body: JSON.stringify(body)
+  });
+  if (!r.ok){
+    const msg = r.status === 401 || r.status === 403 ? 'Intervals.icu rejected the key. Check the API key and athlete ID (Settings → Developer Settings).'
+      : r.status === 429 ? 'Intervals.icu says too many requests. Wait a minute and try again.'
+      : `Intervals.icu returned an error (${r.status}).`;
+    throw new Error(msg);
+  }
+  return r.json().catch(() => ({}));
+}
+async function icuSend(){
+  const status = t => { $('icustatus').textContent = t; };
+  ICU.key = $('icukey').value.trim(); ICU.athlete = $('icuath').value.trim() || '0'; ICU.weeks = +$('icuweeks').value;
+  if (!ICU.key){ status('Paste your Intervals.icu API key first.'); return; }
+  icuSave(ICU);
+  const evs = icuEvents(ICU.weeks);
+  if (!evs.length){ status('Nothing to send in that window.'); return; }
+  status(`Sending ${evs.length} workouts…`);
+  try {
+    await icuCall('/events/bulk?upsert=true', 'POST', evs);
+    ICU.sent = [...new Set([...(ICU.sent || []), ...evs.map(e => e.external_id)])]; icuSave(ICU);
+    status(`Sent ${evs.length} workouts. If Intervals.icu is linked to Garmin with "Upload planned workouts" on, the next week will reach your watch at the next sync.`);
+  } catch (e){
+    status(e instanceof TypeError ? 'Couldn\'t reach Intervals.icu from this browser (offline, or the request was blocked). Use the watch files instead and drop them onto your Intervals.icu calendar.' : e.message);
+  }
+}
+async function icuRemove(){
+  const status = t => { $('icustatus').textContent = t; };
+  ICU.key = $('icukey').value.trim(); ICU.athlete = $('icuath').value.trim() || '0';
+  if (!ICU.key || !(ICU.sent || []).length){ status('Nothing sent from this device to remove.'); return; }
+  status('Removing…');
+  try {
+    await icuCall('/events/bulk-delete', 'PUT', ICU.sent.map(id => ({external_id: id})));
+    status(`Removed the ${ICU.sent.length} workouts this app sent.`); ICU.sent = []; icuSave(ICU);
+  } catch (e){ status(e instanceof TypeError ? 'Couldn\'t reach Intervals.icu from this browser.' : e.message); }
+}
+function icuCard(){
+  return `<div class="card"><h3>Send to Intervals.icu</h3>
+    <p class="sub">Puts your workouts on your Intervals.icu calendar. From there it can send them to your Garmin watch.</p>
+    <label class="field">API key <input id="icukey" type="password" autocomplete="off" value="${esc(ICU.key || '')}" placeholder="Paste key"></label>
+    <label class="field">Athlete ID <input id="icuath" value="${esc(ICU.athlete && ICU.athlete !== '0' ? ICU.athlete : '')}" placeholder="optional"></label>
+    <label class="field">Send <select id="icuweeks">${[[1,'Next week'],[2,'Next 2 weeks'],[4,'Next 4 weeks'],[52,'Whole plan']].map(([v, l]) => `<option value="${v}" ${(+ICU.weeks || 2) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <div class="planbtns" style="margin-top:8px"><button id="icusend">Send workouts</button><button id="icudel">Remove sent</button></div>
+    <p id="icustatus" class="quiet" style="margin:8px 0 0" role="status"></p>
+    <details style="margin-top:8px"><summary class="quiet" style="cursor:pointer">Where do I find my key? Is it safe?</summary>
+      <p class="quiet" style="margin:8px 0 0">On intervals.icu, open Settings and scroll to Developer Settings to create an API key. Your athlete ID is shown there too; leave it blank to use your own account.</p>
+      <p class="quiet" style="margin:8px 0 0">The key is saved only on this device and sent only to intervals.icu. It gives full access to your Intervals.icu account, so don't use this on a shared device. To send workouts to Garmin, turn on "Upload planned workouts" in Intervals.icu's Garmin settings.</p>
+      <p class="quiet" style="margin:8px 0 0">Sending again updates the same workouts instead of duplicating them. "Remove sent" deletes only the workouts this app added.</p></details></div>`;
+}
+
 // =====================================================================
 // MISSED TRAINING
 // =====================================================================
@@ -1989,7 +2276,7 @@ function crc32(buf){
 function zipStore(files, type){
   const enc = new TextEncoder(); const parts = [], central = []; let offset = 0;
   for (const f of files){
-    const name = enc.encode(f.name), data = enc.encode(f.data), crc = crc32(data);
+    const name = enc.encode(f.name), data = f.data instanceof Uint8Array ? f.data : enc.encode(f.data), crc = crc32(data);
     const lh = new DataView(new ArrayBuffer(30));
     lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
     lh.setUint16(8, 0, true); lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true);

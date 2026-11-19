@@ -127,6 +127,11 @@ details.day summary::-webkit-details-marker{display:none}
 .overview td{padding:6px 0;border-bottom:1px solid var(--line)}
 .overview td:last-child{text-align:right}
 .overview tr.cur td{font-weight:700}
+.steps{margin:8px 0 0;padding-left:18px;font-size:15px}
+.steps li{margin:3px 0}
+.goal{border-left:4px solid var(--bike)}
+.goal.goal-amb{border-left-color:var(--lift)}
+.goal.goal-big{border-left-color:#B3261E}
 .overview button{border:none;background:none;color:var(--run);cursor:pointer;font:inherit;padding:0}
 </style>
 </head>
@@ -593,24 +598,156 @@ function weekLayout(){
   return roles;
 }
 
+// ---------- paces and effort ----------
+function benchT5k(){
+  if (A.benchKind === 'none' || !secs(A.benchTime)) return null;
+  return secs(A.benchTime) * Math.pow(3.107 / DIST_MI[A.benchDist], 1.06);
+}
+// Training paces in sec/mile, from a 5K-equivalent of the benchmark
+function paceZones(){
+  const t5 = benchT5k(); if (!t5) return null;
+  const p5 = t5 / 3.107;
+  const z = {E:p5 * 1.32, steady:p5 * 1.2, MP:p5 * 1.15, HM:p5 * 1.09, T:p5 * 1.075, '10K':p5 * 1.042, '5K':p5, R:p5 * 0.94};
+  const g = secs(A.goalTime);
+  z.race = g ? g / DIST_MI[A.distance] : {'5K':z['5K'], '10K':z['10K'], 'Half':z.HM, 'Full':z.MP}[A.distance];
+  return z;
+}
+const ZONE_LABEL = {E:'easy', steady:'steady', MP:'marathon pace', HM:'half-marathon pace', T:'threshold', '10K':'10K pace', '5K':'5K pace', R:'mile pace', race:'goal race pace'};
+const ZONE_RPE = {E:'2–3', steady:'5', MP:'5–6', HM:'6–7', T:'7', '10K':'8', '5K':'8–9', R:'9'};
+function fmtPace(sPerMi){
+  const s = Math.round(A.units === 'km' ? sPerMi / KM : sPerMi);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '/' + A.units;
+}
+let Z = null;   // set per plan build
+function at(key){
+  const rpe = key === 'race' ? {'5K':'8–9', '10K':'8', 'Half':'6–7', 'Full':'5–6'}[A.distance] : ZONE_RPE[key];
+  const label = key === 'race' && Z && Z.raceProj ? 'projected race pace' : ZONE_LABEL[key];
+  return Z ? `at ${label} (${fmtPace(Z[key])}, RPE ${rpe})` : `at ${label} (RPE ${rpe})`;
+}
+
+// ---------- workouts ----------
+function workoutSteps(d, phase, f, k, pace){
+  const D = A.distance, lvl = A.experience, short = D === '5K' || D === '10K';
+  const n = (lo, hi) => Math.round(lo + (hi - lo) * f);
+  // Keep the main set to ~60% of the day's distance so warm-up and cool-down fit
+  const fit = (reps, repMi) => Math.max(2, Math.min(reps, Math.floor(0.6 * d.miles / repMi)));
+  const fitMin = (reps, min) => fit(reps, min / (pace * 0.8));
+  const WU = 'Warm up: 10–15 min easy, then 4 strides';
+  const CD = "Cool down: easy running to finish the day's distance";
+  const long = d.miles * pace > 75;
+  const fuel = 'Practice fueling: carbs every 30–45 min';
+  switch (d.kind){
+    case 'E': return ['Easy the whole way ' + at('E')].concat(d.strides ? ['Finish with 6 × 20 s strides: quick and relaxed, full recovery between'] : []);
+    case 'R': return ['Slower than easy. Skip it if you feel beat up.'];
+    case 'MLR': return ['Easy the whole way ' + at('E')].concat(long ? [fuel] : []);
+    case 'SH': return ['15–20 min very easy', '4 × 20 s strides'];
+    case 'TT': return [WU, `Run ${D === 'Full' ? 'a hard 10K' : D === 'Half' ? 'a hard 10K' : 'your ' + D} as a time trial, or at goal effort`, 'Cool down: 10 min easy'];
+    case 'RACE': return ['Start a touch slower than goal pace for the first mile', 'Settle in ' + at('race')].concat(D === 'Full' || D === 'Half' ? ['Fuel the way you practiced: carbs every 30–45 min'] : ['Hold back for the first half, then race the second']);
+    case 'Q': {
+      if (phase === 'base'){
+        if (lvl === 'new') return ['Easy ' + at('E'), 'Finish with 4–6 × 20 s strides'];
+        return k % 2 ? [WU, `${n(6, 10)} × 30 s hill sprints, hard but controlled; walk down to recover`, CD]
+                     : [WU, `Fartlek: ${n(6, 10)} × 1 min ${at('10K')}, 1 min easy between`, CD];
+      }
+      if (phase === 'taper') return [WU, short ? `${n(4, 6)} × 400 m ${at('race')}, full recovery` : `3 × 1 km ${at('race')}, 2 min jog`, CD];
+      if (lvl === 'new') return [WU, `Fartlek: ${n(5, 8)} × 1–2 min comfortably hard (RPE 7), 2 min easy between`, CD];
+      if (phase === 'peak' && D === '5K') return [WU, `${fit(n(8, 12), 0.25)} × 400 m ${at('race')}, 200 m jog`, CD];
+      if (phase === 'peak' && D === '10K') return [WU, `${fit(n(4, 6), 0.62)} × 1 km ${at('race')}, 400 m jog`, CD];
+      const ff = phase === 'peak' ? 1 : f;
+      const m = (lo, hi) => Math.round(lo + (hi - lo) * ff);
+      if (short) return [WU, lvl === 'regular' ? `${fit(m(5, 6), 0.62)} × 1 km ${at('5K')}, 2–3 min jog` : `${fit(m(5, 6), 0.5)} × 800 m ${at('5K')}, equal-time jog`, CD];
+      return [WU, lvl === 'regular' ? `${fit(m(4, 6), 1)} × 1600 m ${at('10K')}, 2–3 min jog` : `${fit(m(6, 8), 0.5)} × 800 m ${at('10K')}, 400 m jog`, CD];
+    }
+    case 'T': {
+      if (phase === 'taper') return ['Easy ' + at('E'), 'Finish with 4–6 × 20 s strides'];
+      if (phase === 'base'){
+        if (lvl === 'new') return ['Easy the whole way ' + at('E')];
+        return ['Easy for the first half ' + at('E'), `Then ${n(15, 25)} min ${at('steady')}`, 'Easy to finish'];
+      }
+      if (phase === 'peak'){
+        if (short) return [WU, lvl === 'new' ? `${n(2, 3)} × 5 min ${at('T')}, 2 min easy jog` : `Cruise intervals: ${fit(n(4, 5), 1)} × 1600 m ${at('T')}, 1 min rest`, CD];
+        if (D === 'Half') return [WU, lvl === 'new' ? `2 × ${fmtDist(1.5)} ${at('race')}, 3 min easy` : `${fit(n(2, 3), 2.5)} × ${fmtDist(2)} ${at('race')}, 800 m float at steady pace`, CD];
+        return ['Easy ' + at('E'), `Last ${n(15, 20)} min ${at('steady')}`, 'Kept light on purpose: the long run carries goal-pace work this phase'];
+      }
+      if (lvl === 'new') return [WU, `${n(2, 3)} × 5 min ${at('T')}, 2 min easy jog`, CD];
+      if (lvl === 'some') return [WU, `Float set: ${fitMin(n(3, 4), 8)} × 6 min ${at('T')}, 2 min float at steady pace (keep moving, no full stops)`, CD];
+      return [WU, `Float set: ${fitMin(n(3, 5), 10)} × 8 min ${at('T')}, 2 min float at steady pace (keep moving, no full stops)`, CD];
+    }
+    case 'L': {
+      if (phase === 'taper') return ['Easy and relaxed ' + at('E'), 'Shorter on purpose. Arrive at the start line fresh.'];
+      const base = ['Easy the whole way ' + at('E'), 'Even effort beats even pace on hills'];
+      const rehearse = 'Dress rehearsal: race-morning breakfast, race kit and shoes, race-day fueling';
+      if (phase !== 'peak') return base.concat(long ? [fuel] : []);
+      if (D === 'Full'){
+        const mp = lvl === 'new' ? `Last ${fmtDist(3)} ${at('race')}` : lvl === 'some' ? `2 × ${fmtDist(3)} ${at('race')}, ${fmtDist(1)} easy between` : `Middle ${fmtDist(n(8, 12))} ${at('race')}`;
+        return (d.rehearsal ? [rehearse] : []).concat(['Easy ' + at('E') + ' to start', mp, 'Easy to finish', fuel]);
+      }
+      if (D === 'Half' && lvl !== 'new') return (d.rehearsal ? [rehearse] : []).concat(['Easy ' + at('E'), `Last ${fmtDist(n(2, 3))} ${at('race')}`]).concat(long ? [fuel] : []);
+      return (d.rehearsal && !short ? [rehearse] : []).concat(base).concat(long ? [fuel] : []);
+    }
+  }
+  return [];
+}
+
+// ---------- strength templates ----------
+const LIFTS = {
+  bb: {
+    heavy: rx => [`Trap bar deadlift or back squat: ${rx}`, 'Bulgarian split squat: 3 × 6/leg', 'Single-leg RDL: 3 × 8/leg', 'Bent-knee calf raise, heavy: 3 × 10–12', 'Box jumps: 3 × 4, full reset each rep', 'Pallof press: 2 × 10/side'],
+    moderate: ['Goblet or front squat: 3 × 8', 'Step-ups: 3 × 8/leg', 'Hip thrust: 3 × 10', 'Single-leg calf raise: 3 × 15', 'Rows and push-ups: 2 × 10 each', 'Side plank: 2 × 30 s/side']
+  },
+  db: {
+    heavy: rx => [`Heavy goblet squat or dumbbell split squat: ${rx}`, 'Single-leg RDL with a dumbbell or kettlebell: 3 × 6–8/leg', 'Weighted step-up: 3 × 6/leg', 'Single-leg calf raise holding a dumbbell: 3 × 10–12', 'Pogo hops: 3 × 20 s', 'Suitcase carry: 3 × 30 m/side'],
+    moderate: ['Reverse lunge: 3 × 8/leg', 'Kettlebell swing: 3 × 15', 'Lateral lunge: 2 × 8/side', 'Calf raise: 3 × 15', 'Dumbbell row and push-ups: 2 × 10 each', 'Dead bug: 2 × 8/side']
+  },
+  bw: {
+    heavy: rx => [`Bulgarian split squat with a loaded backpack: ${rx}`, 'Single-leg RDL holding the backpack: 3 × 10/leg', 'High step-up (knee-height box): 3 × 10/leg', 'Single-leg calf raise, slow on the way down: 3 × 15–20', 'Skater hops: 3 × 6/side', 'Plank: 3 × 45 s'],
+    moderate: ['Circuit, 2–3 rounds:', 'Walking lunges × 10/leg', 'Glute bridge × 15', 'Calf raises × 20', 'Push-ups × 10', 'Side plank × 30 s/side']
+  }
+};
+function liftSteps(t, phase){
+  const eq = LIFTS[A.equipment] ? A.equipment : 'bw';
+  if (t.includes('maintenance')) return ['Main lift from your heavy day: 2 sets, stop well short of fatigue', 'One single-leg move: 2 sets', 'Calf raises: 2 sets', 'Skip the jumps in the last 10 days before your race'];
+  if (t.includes('heavy')){
+    const rx = eq === 'bw' ? (phase === 'base' ? '3 × 10/leg' : '3 × 6–8/leg, add weight to the pack') : (phase === 'base' ? '3 × 6 at RPE 7' : '2–3 × 3–5 at RPE 8, heavy with clean reps');
+    return LIFTS[eq].heavy(rx);
+  }
+  return LIFTS[eq].moderate;
+}
+
+// ---------- goal check ----------
+function goalCheck(N){
+  const t5 = benchT5k(), g = secs(A.goalTime);
+  if (!t5 || !g) return null;
+  const proj = t5 * Math.pow(DIST_MI[A.distance] / 3.107, 1.06);
+  const r = {new:[0.05, 0.10], some:[0.03, 0.06], regular:[0.01, 0.03]}[A.experience];
+  const sc = Math.min(1, N / 12);
+  const fast = proj * (1 - r[1] * sc), slow = proj * (1 - r[0] * sc);
+  const tier = g >= fast ? 'on' : g >= fast * 0.95 ? 'amb' : 'big';
+  return {fast, slow, goal: g, tier};
+}
+function fmtSecs(x){
+  x = Math.round(x); const h = Math.floor(x / 3600), m = Math.floor(x % 3600 / 60), s = x % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+}
+
 function sessionTitle(role, phase, week, ctx){
   const D = A.distance, lvl = A.experience, short = (D === '5K' || D === '10K');
   if (role === 'Q'){
     if (phase === 'base') return lvl === 'new' ? 'Easy + strides' : 'Hills or fartlek';
     if (phase === 'build') return lvl === 'new' ? 'Fartlek' : short ? 'VO2 intervals' : 'Intervals';
-    if (phase === 'peak') return short ? 'Race-pace reps' : lvl === 'new' ? 'Fartlek' : 'Intervals';
+    if (phase === 'peak') return lvl === 'new' ? 'Fartlek' : short ? 'Race-pace reps' : 'Intervals';
     return 'Race-pace touches';
   }
   if (role === 'T'){
     if (phase === 'base') return lvl === 'new' ? 'Easy run' : 'Steady run';
     if (phase === 'build') return lvl === 'new' ? 'Tempo (short)' : 'Tempo (float sets)';
-    if (phase === 'peak') return short ? 'Threshold (cruise intervals)' : D === 'Half' ? 'Half-marathon pace' : 'Steady run';
+    if (phase === 'peak') return short ? (lvl === 'new' ? 'Tempo (short)' : 'Threshold (cruise intervals)') : D === 'Half' ? 'Half-marathon pace' : 'Steady run';
     return 'Easy + strides';
   }
   if (role === 'L'){
     if (phase === 'peak' && D === 'Full') return ctx.rehearsal ? 'Long run: dress rehearsal' : 'Long run with goal-pace miles';
     if (phase === 'peak' && D === 'Half' && lvl !== 'new') return ctx.rehearsal ? 'Long run: dress rehearsal' : 'Long run, fast finish';
-    if (phase === 'peak' && ctx.rehearsal) return 'Long run: dress rehearsal';
+    if (phase === 'peak' && ctx.rehearsal && !short) return 'Long run: dress rehearsal';
     return phase === 'taper' ? 'Long run (shorter)' : 'Long run';
   }
   if (role === 'E') return ctx.strides ? 'Easy + strides' : 'Easy run';
@@ -618,7 +755,7 @@ function sessionTitle(role, phase, week, ctx){
   return 'Rest';
 }
 const HINT = {
-  Q:'Your hard day. Very hard efforts with very easy recoveries. Full workout details come in the next update.',
+  Q:'Your hard day. Very hard efforts with very easy recoveries.',
   T:'Comfortably hard. Float sets keep you working near threshold without full stops.',
   L:'Conversational the whole way. It is hard because of the distance, not the pace.',
   E:'Truly easy. You should be able to hold a conversation.',
@@ -635,6 +772,9 @@ function buildPlan(){
   const N = planWeeks();
   const D = A.distance, lvl = A.experience, n = +A.days;
   const pace = easyPace();
+  Z = paceZones();
+  const gc0 = goalCheck(planWeeks());
+  if (Z && gc0 && gc0.tier === 'big'){ Z.race = gc0.fast / DIST_MI[D]; Z.raceProj = true; }
   const band = BANDS[D][lvl];
   const recent = volMi();
   const start = A.expert ? Math.max(recent, 1) : Math.max(recent, FLOOR[D]);
@@ -750,7 +890,7 @@ function buildPlan(){
       } else if (!raceDate && isLast && role === 'L'){
         title = 'Time trial or goal effort'; hintKey = 'TT'; miles = Math.max(DIST_MI[A.distance] + 2, minRun);
       }
-      days.push({date, role, title, miles: miles ? r5(miles) : 0, hint: HINT[hintKey] || '', lift: null});
+      days.push({date, role, title, miles: miles ? r5(miles) : 0, hint: HINT[hintKey] || '', lift: null, kind: hintKey, strides: !!ctx.strides, rehearsal: role === 'L' && !!ctx.rehearsal});
     }
     // Strength: on hard days first, never the day before the long run or on the long run
     let sCount = phase === 'peak' ? Math.min(1, strengthN) : phase === 'taper' ? (isLast ? 0 : Math.min(1, strengthN)) : strengthN;
@@ -771,7 +911,18 @@ function buildPlan(){
     const total = days.reduce((s, d) => s + (d.role === 'RACE' ? 0 : d.miles), 0);
     return {phase, days, total};
   });
-  return {weeks, notes, N, pace, target, peakVol, start};
+  // Fill in workouts: progress (0..1) through each phase drives rep counts
+  const pCount = {}, pSeen = {};
+  phases.forEach(p => pCount[p] = (pCount[p] || 0) + 1);
+  weeks.forEach(W => {
+    const k = pSeen[W.phase] = (pSeen[W.phase] || 0) + 1;
+    const f = pCount[W.phase] > 1 ? (k - 1) / (pCount[W.phase] - 1) : 1;
+    W.days.forEach(d => {
+      d.steps = workoutSteps(d, W.phase, f, k, pace);
+      if (d.lift) d.liftSteps = liftSteps(d.lift, W.phase);
+    });
+  });
+  return {weeks, notes, N, pace, target, peakVol, start, goal: goalCheck(N)};
 }
 
 // ---------- plan view ----------
@@ -834,8 +985,8 @@ function drawPlan(){
         <span><span class="dn">${DAYS[(d.date.getDay() + 6) % 7]} · ${esc(d.title)}</span><br><span class="sumline">${sum}</span></span>
         <span class="dots">${d.miles ? '<i class="dot run"></i>' : ''}${d.lift ? '<i class="dot lift"></i>' : ''}</span></summary>
       <div class="daybody">
-        ${d.role !== 'off' || d.miles ? `<div class="item run"><h3>${esc(d.title)}${d.miles ? ' · ' + fmtDist(d.miles) : ''}</h3><p>${esc(d.hint)}</p></div>` : `<div class="item"><p>${esc(d.hint)}</p></div>`}
-        ${d.lift ? `<div class="item lift"><h3>${esc(d.lift)}</h3><p>${esc(liftHint(d.lift))}</p></div>` : ''}
+        ${d.role !== 'off' || d.miles ? `<div class="item run"><h3>${esc(d.title)}${d.miles ? ' · ' + fmtDist(d.miles) : ''}</h3><p>${esc(d.hint)}</p>${stepList(d.steps)}</div>` : `<div class="item"><p>${esc(d.hint)}</p></div>`}
+        ${d.lift ? `<div class="item lift"><h3>${esc(d.lift)}</h3><p>${esc(liftHint(d.lift))}</p>${stepList(d.liftSteps)}</div>` : ''}
       </div></details>`;
   }).join('');
   const overview = P.weeks.map((w, i) => `<tr class="${i === wk ? 'cur' : ''}"><td><button data-week="${i}">Week ${i+1}</button></td><td>${PHASE_NAME[w.phase]}</td><td>${fmtDist(w.total)}</td></tr>`).join('');
@@ -850,6 +1001,7 @@ function drawPlan(){
     <div class="strip">${strip}</div>
     <div class="legend"><span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}</div>
     ${cards}
+    ${goalCard()}
     <details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
       <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul>
       ${(P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}</details>
@@ -861,11 +1013,28 @@ function drawPlan(){
   if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
   $('plan').querySelectorAll('[data-week]').forEach(b => b.onclick = () => { wk = +b.dataset.week; drawPlan(); window.scrollTo(0, 0); });
 }
+function stepList(a){
+  return a && a.length ? `<ul class="steps">${a.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+}
+function goalCard(){
+  const g = P.goal; if (!g) return '';
+  const label = {on:'On track', amb:'Ambitious', big:'Big stretch'}[g.tier];
+  const msg = {
+    on:'Your goal fits where your fitness is likely to be on race day.',
+    amb:'Your goal is a bit faster than your projected range. Possible with a great block and a good day.',
+    big:'Your goal is well beyond your projected range. Race-pace workouts use your projected pace instead, so the plan stays safe. Re-test partway through and update your benchmark if you\'re ahead of schedule.'
+  }[g.tier];
+  const caveat = [A.benchKind === 'aspire' ? 'Your benchmark is a best guess, so this is too. A time trial in week 3 or 4 will sharpen it.' : '',
+    A.distance === 'Full' ? 'Marathon projections from shorter races run optimistic, especially for newer marathoners.' : ''].filter(Boolean).join(' ');
+  return `<div class="card goal goal-${g.tier}" style="margin-top:16px"><h3>Goal check: ${label}</h3>
+    <p style="margin:0 0 6px;font-size:15px">Projected race-day range: <b>${fmtSecs(g.fast)}–${fmtSecs(g.slow)}</b>. Your goal: <b>${fmtSecs(g.goal)}</b>.</p>
+    <p style="margin:0;font-size:15px">${msg}</p>${caveat ? `<p class="quiet" style="margin:8px 0 0">${caveat}</p>` : ''}</div>`;
+}
 function liftHint(t){
   const eq = {bw:'Bodyweight', db:'Dumbbells/kettlebells', bb:'Barbell'}[A.equipment] || '';
-  if (t.includes('heavy')) return `${eq}: 1–2 hard sets of your big lift, plus plyos. After your run, ideally 6+ hours later. Template details come in a later update.`;
-  if (t.includes('maintenance')) return `${eq}: one short session to hold your strength. Keep it well short of fatigue.`;
-  return `${eq}: moderate single-leg work, calves and core.`;
+  if (t.includes('heavy')) return `${eq}. After your run, ideally 6+ hours later. The first lift is the heavy one; the rest support it.`;
+  if (t.includes('maintenance')) return `${eq}. One short session to hold your strength without adding fatigue.`;
+  return `${eq}. Moderate effort, finish feeling like you had more in the tank.`;
 }
 
 if (A.built) showPlan(); else render();

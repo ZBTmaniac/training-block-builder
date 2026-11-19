@@ -84,7 +84,7 @@ label.field input,label.field select{background:var(--bg);border:1px solid var(-
 /* ---------- plan view ---------- */
 .phase{font-size:14px;color:var(--muted);margin:4px 0 0}
 .weekrow{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
-.weekno{font-family:var(--display);font-weight:700;font-size:64px;line-height:.9;letter-spacing:-1px;margin:4px 0 0}
+.weekno{font-family:var(--display);font-weight:700;font-size:clamp(40px,12vw,64px);white-space:nowrap;line-height:.9;letter-spacing:-1px;margin:4px 0 0}
 .weekno small{font-size:28px;color:var(--muted);font-weight:600;letter-spacing:0}
 .dates{font-size:15px;color:var(--muted);margin:6px 0 0}
 .nav{display:flex;gap:6px}
@@ -544,6 +544,7 @@ const HINT = {
   R:'Slower than easy. Just loosen up after the long run.',
   RACE:'Race day. Start controlled, finish strong.',
   TT:'Run your goal distance or a hard time trial to see where your fitness is.',
+  MLR:'Easy pace, longer than your other weekday runs. It carries endurance work the long run can\'t.',
   SH:'Short and easy, with a few strides to wake the legs up.',
   off:'Rest, walk, or easy cross-training.'
 };
@@ -558,6 +559,15 @@ function buildPlan(){
   const start = Math.max(recent, FLOOR[D]);
   if (start > recent + 0.5) notes.floor = start;
   let target = start >= band[1] ? start * 1.05 : Math.min(band[1], Math.max(band[0], start * 1.25));
+  // Time-aware ceiling: what fits in the week without breaking the long-run and single-run caps
+  const tCap = (D === '5K' || D === '10K') ? {new:60, some:75, regular:90}[lvl] : 150;
+  const lrCap0 = Math.min(tCap / pace, D === 'Full' ? (lvl === 'regular' ? 22 : 20) : D === 'Half' ? 15 : 13);
+  const fits = k => 0.95 * (lrCap0 + (k - 1) * (70 / pace)
+    - (k >= 5 ? (70 - 45) / pace : 0) + (k >= 5 ? Math.max(0, Math.min(0.7 * lrCap0, 90 / pace) - 70 / pace) : 0));
+  if (target > fits(n) + 1){
+    notes.timeLimited = {target, fit: fits(n), next: n < 6 ? Math.min(target, fits(n + 1)) : null, overStart: start > fits(n)};
+    target = Math.max(start, fits(n));
+  }
   const gap = Math.max(0, Math.min(1, (target - start) / target));
   const phases = phaseList(N, gap);
   const rampWeeks = phases.filter(p => p === 'base' || p === 'build').length;
@@ -573,6 +583,39 @@ function buildPlan(){
   const capMiAll = Math.min(timeCap / pace, distCap);
   const peakIdx = phases.map((p, i) => p === 'peak' ? i : -1).filter(i => i >= 0);
   const rehearsals = new Set(peakIdx.slice(0, 2));
+  // Marathon: slower runners with a long enough plan may take the dress-rehearsal long runs
+  // to 3 hours or 16 mi. Every other long run stays under ~2.5 hours.
+  const extCap = Math.min(180 / pace, 16);
+  const extOK = D === 'Full' && extCap > capMiAll + 0.5 && N >= 16 && start * LONG_SHARE[n] >= 6;
+  if (D === 'Full' && extCap > capMiAll + 0.5 && !extOK) notes.shortForExt = true;
+  // Caps for runs other than the long run
+  const runCap = 70 / pace, recCap = 45 / pace, mlrCap = 90 / pace;
+  const circ = (a, b) => { const g = Math.abs(a - b); return Math.min(g, 7 - g); };
+  const RW = {Q:1.15, T:1.15, E:1, R:0.7};
+  // Split the non-long-run volume across the week. Single runs are capped; on 5-6 days the
+  // overflow goes to one midweek medium-long run; anything left is reported as a shortfall.
+  function allocate(rest, longMi){
+    const idxs = [0,1,2,3,4,5,6].filter(d => RW[layout[d]]);
+    const sum = idxs.reduce((t, d) => t + RW[layout[d]], 0) || 1;
+    const out = {}; let over = 0, mlr = -1;
+    idxs.forEach(d => {
+      const r = layout[d];
+      let m = Math.max(r === 'R' ? minRec : minRun, rest * RW[r] / sum);
+      const cap = r === 'R' ? recCap : runCap;
+      if (m > cap){ over += m - cap; m = cap; }
+      out[d] = m;
+    });
+    if (over > 0.25 && n >= 5){
+      const L = layout.indexOf('L');
+      const eDays = idxs.filter(d => layout[d] === 'E').sort((a, b) => circ(b, L) - circ(a, L));
+      if (eDays.length){
+        mlr = eDays[0];
+        const add = Math.min(over, Math.max(0, Math.min(0.7 * longMi, mlrCap) - out[mlr]));
+        out[mlr] += add; over -= add;
+      }
+    }
+    return {out, over, mlr};
+  }
   const strengthN = +A.strength || 0;
 
   let ti = 0, bestLR = 0;
@@ -589,14 +632,18 @@ function buildPlan(){
       const f = phase === 'peak' ? 1 : (rampWeeks ? (w + 1) / (rampWeeks + 1) : 1);
       longMi = Math.max(vol * LONG_SHARE[n], startLR + (peakLR - startLR) * f);
       if (ramp.cut[w]) longMi *= 0.8;
+      const ext = extOK && rehearsals.has(w);
+      if (ext) longMi = Math.max(longMi, extCap);
       longMi = Math.min(longMi, vol * 0.55);
-      if (longMi > capMiAll){ longMi = capMiAll; if (!(D === '5K' || D === '10K')) notes.capped = true; }
+      const capThis = ext ? extCap : capMiAll;
+      if (longMi > capThis){ longMi = capThis; if (!(D === '5K' || D === '10K')) notes.capped = true; }
+      if (ext && longMi > capMiAll + 0.5) notes.extended = Math.max(notes.extended || 0, longMi);
       if (longMi / vol > 0.4) notes.share = true;
       bestLR = Math.max(bestLR, longMi);
     }
     const rest = Math.max(0, vol - longMi);
-    const W = {Q:1.15, T:1.15, E:1, R:0.7};
-    const weightSum = layout.reduce((s, r) => s + (W[r] || 0), 0) || 1;
+    const al = allocate(rest, longMi);
+    if (phase !== 'taper' && al.over > Math.max(2, 0.1 * vol)) notes.addDay = Math.max(notes.addDay || 0, al.over);
     let stridesGiven = false;
     const days = [];
     for (let j = 0; j < 7; j++){
@@ -605,10 +652,12 @@ function buildPlan(){
       let role = layout[wd];
       let miles = 0;
       if (role === 'L') miles = longMi;
-      else if (W[role]) miles = Math.max(role === 'R' ? minRec : minRun, rest * W[role] / weightSum);
+      else if (RW[role]) miles = al.out[wd];
+      const isMLR = wd === al.mlr && miles > runCap + 0.5;
       let ctx = {rehearsal: rehearsals.has(w)};
-      if (role === 'E' && !stridesGiven && phase !== 'taper' && !(phase === 'base' && lvl === 'new')){ ctx.strides = true; stridesGiven = true; }
+      if (role === 'E' && !isMLR && !stridesGiven && phase !== 'taper' && !(phase === 'base' && lvl === 'new')){ ctx.strides = true; stridesGiven = true; }
       let title = sessionTitle(role, phase, w, ctx), hintKey = role;
+      if (isMLR){ title = 'Medium-long run'; hintKey = 'MLR'; }
       // Race week handling
       if (raceDate && isLast){
         const daysToRace = Math.round((raceDate - date) / 864e5);
@@ -664,7 +713,17 @@ function noteList(){
   if (N.floor) out.push(`Week 1 starts at about ${fmtDist(N.floor)}, a bit above your recent volume, because this plan needs a minimum base.`);
   if (N.outkick) out.push(`Your timeline can't safely reach this plan's usual peak of ${fmtDist(N.outkick.target)}. It tops out near ${fmtDist(N.outkick.peak)}. A later race or shorter distance would help, or treat this as a finish-focused plan.`);
   else if (N.compressed) out.push('Short timeline: volume steps up every 2 weeks with no cutback weeks. Back off if you feel run down.');
-  if (N.capped) out.push(`Long runs are capped at about 2.5 hours (around ${fmtDist(150 / P.pace)} at your easy pace). Your weekly miles do the rest of the endurance work.`);
+  if (N.extended) out.push(`Your two dress-rehearsal long runs build to about 3 hours (${fmtDist(N.extended)}). Every other long run stays under about 2.5 hours, which is where injury risk starts to climb.`);
+  else if (N.shortForExt && N.capped) out.push(`Long runs are capped at about 2.5 hours (around ${fmtDist(150 / P.pace)} at your easy pace). Building safely to 3 hours takes a plan of 16+ weeks and a starting long run of about 6 miles.`);
+  else if (N.capped) out.push(`Long runs are capped at about 2.5 hours (around ${fmtDist(150 / P.pace)} at your easy pace). Your weekly miles do the rest of the endurance work.`);
+  if (N.timeLimited){
+    const t = N.timeLimited;
+    out.push(`This plan usually peaks around ${fmtDist(t.target)} a week. At your easy pace, ${A.days} run days fit about ${fmtDist(t.fit)} without breaking the long-run and single-run caps, so that's your peak.` + (t.overStart ? ' Your current volume is already above that, so some weeks will come in under it.' : '') +
+      (t.next && t.next > t.fit + 1 ? ` Adding one more easy day would raise it to about ${fmtDist(t.next)}.` : ''));
+  }
+  if (N.addDay && !N.timeLimited) out.push(+A.days < 6
+    ? `Some weeks come up about ${fmtDist(N.addDay)} short of this plan's target, because long runs and single runs are capped. Adding one more easy run day would cover it.`
+    : `Some weeks come up about ${fmtDist(N.addDay)} short of this plan's target because runs are capped. That's fine; the caps protect you.`);
   if (N.share) out.push('Your long run is more than 40% of some weeks. Adding a short run or a midweek medium-long run would spread the load.');
   if (A.benchKind === 'aspire') out.push('Your paces come from a best-guess time. Run a time trial in week 3 or 4 to check them.');
   out.push('Not medical advice. Listen to your body and adjust.');
@@ -710,12 +769,14 @@ function drawPlan(){
     <div class="legend"><span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}</div>
     ${cards}
     <details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
-      <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul></details>
+      <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul>
+      ${(P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}</details>
     <details class="card notes"><summary>All weeks</summary><table class="overview">${overview}</table></details>
     <div class="planbtns"><button id="editans">Edit answers</button></div>`;
   $('pprev').onclick = () => { if (wk > 0){ wk--; drawPlan(); } };
   $('pnext').onclick = () => { if (wk < P.N - 1){ wk++; drawPlan(); } };
   $('editans').onclick = showQuiz;
+  if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
   $('plan').querySelectorAll('[data-week]').forEach(b => b.onclick = () => { wk = +b.dataset.week; drawPlan(); window.scrollTo(0, 0); });
 }
 function liftHint(t){

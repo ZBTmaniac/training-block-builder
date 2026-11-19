@@ -391,7 +391,7 @@ function heatCard(){
       <div style="font-size:14px;margin-top:8px">
         <p style="margin:0 0 8px"><b>Expect to slow down.</b> Most runners race best somewhere around 45–60°F (7–15°C). Above that, the same pace takes more effort. In marathons, mid-pack runners slow by roughly 4–5 seconds per mile for every °C (about 2°F) above 60°F, and humidity makes it worse. Shorter races are affected less.</p>
         <p style="margin:0 0 8px"><b>Your body adapts in 1–2 weeks.</b> With regular heat exposure, most adaptations happen within 7–14 days: lower heart rate at the same effort, more blood plasma, and earlier, heavier sweating.</p>
-        <p style="margin:0 0 8px"><b>How to adapt:</b> do some easy runs in the heat of the day or slightly overdressed, or spend 20–30 minutes in a sauna or hot bath after a run. Start gently and build. Stop if you feel dizzy, confused or stop sweating.</p>
+        <p style="margin:0 0 8px"><b>How to adapt:</b> do some easy runs in the warmest part of the day, or sit in a sauna or hot bath right after a run. Start with 10–15 minutes and build toward 20–30. Keep the runs easy, drink plenty, and stop if you feel dizzy, confused or stop sweating. We don't recommend overdressing (sweat suits and extra layers): it's riskier, and there's little evidence it helps athletes already trained for their race.</p>
         <p style="margin:0 0 8px"><b>On race day:</b> start slower than goal pace, drink to thirst with some sodium, pour water over yourself at aid stations, and adjust your goal to the conditions. Pacing by effort or heart rate works better than pace in the heat.</p>
         <p class="quiet" style="margin:0">If you pick Warm or Hot, the plan adds heat-adaptation work in the two weeks before race week and race-day heat tips.</p>
       </div></details></div>`;
@@ -1072,7 +1072,7 @@ function buildPlan(){
       if (isHotRace() && raceDate){
         const toRace = Math.round((raceDate - d.date) / 864e5);
         if (toRace >= 8 && toRace <= 21 && ['E','R','MLR'].includes(d.kind))
-          d.steps.push('Heat adaptation: run this one in the heat of the day or slightly overdressed, or add 20–30 min in a sauna or hot bath afterward. Build gradually; stop if you feel dizzy.');
+          d.steps.push('Heat adaptation: run this one in the warmest part of the day, or follow it with a sauna or hot bath (start at 10–15 min, build toward 20–30). Keep it easy, drink plenty, and stop if you feel dizzy.');
         if (toRace >= 8 && toRace <= 35 && d.kind === 'L')
           d.steps.push('Warm-race practice: drink to thirst with sodium, and wear what you\'ll race in.');
         if (d.kind === 'RACE')

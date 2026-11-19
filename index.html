@@ -80,16 +80,66 @@ label.field input,label.field select{background:var(--bg);border:1px solid var(-
 .bar button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .bar button[hidden]{display:none}
 .quiet{font-size:13px;color:var(--muted)}
+
+/* ---------- plan view ---------- */
+.phase{font-size:14px;color:var(--muted);margin:4px 0 0}
+.weekrow{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
+.weekno{font-family:var(--display);font-weight:700;font-size:64px;line-height:.9;letter-spacing:-1px;margin:4px 0 0}
+.weekno small{font-size:28px;color:var(--muted);font-weight:600;letter-spacing:0}
+.dates{font-size:15px;color:var(--muted);margin:6px 0 0}
+.nav{display:flex;gap:6px}
+.nav button{width:44px;height:44px;border-radius:22px;border:1px solid var(--line);background:var(--surface);font-size:20px;cursor:pointer}
+.nav button:disabled{opacity:.35}
+.weeknote{margin:12px 0 0;font-size:15px}
+.strip{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:18px 0 6px}
+.strip a{display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:var(--muted);font-size:12px}
+.strip a.is-today{color:var(--ink);font-weight:700}
+.bars{display:flex;align-items:flex-end;gap:3px;height:44px}
+.bar-run{width:7px;border-radius:2px;background:var(--run)}
+.bar-run.race{background:var(--lift)}
+.bar-lift{width:7px;height:10px;border-radius:2px;background:var(--lift)}
+.bar-rest{background:var(--rest);height:4px;width:4px;border-radius:2px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:0 0 14px}
+.legend span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
+.legend .l-run::before{background:var(--run)} .legend .l-lift::before{background:var(--lift)}
+details.day{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:0 0 10px;overflow:hidden}
+details.day.is-today{border:2px solid var(--ink)}
+details.day summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:center;gap:12px}
+details.day summary::-webkit-details-marker{display:none}
+.dnum{font-family:var(--display);font-weight:700;font-size:30px;line-height:1;min-width:34px;text-align:center}
+.dn{font-weight:600}
+.sumline{font-size:14px;color:var(--muted)}
+.dots{margin-left:auto;display:flex;gap:4px}
+.dot{width:9px;height:9px;border-radius:50%}
+.dot.run{background:var(--run)} .dot.lift{background:var(--lift)}
+.daybody{padding:0 14px 14px}
+.item{border-left:3px solid var(--rest);padding:2px 0 2px 12px;margin:12px 0}
+.item.run{border-color:var(--run)} .item.lift{border-color:var(--lift)}
+.item h3{font-size:16px;margin:0 0 2px}
+.item p{margin:0;font-size:15px}
+.notes summary{cursor:pointer;font-weight:600;list-style:none}
+.notes summary::-webkit-details-marker{display:none}
+.notes summary::after{content:" ▾";color:var(--muted)}
+.planbtns{display:flex;gap:10px;margin:18px 0 0}
+.planbtns button{flex:1;height:44px;border-radius:22px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:600}
+.overview{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.overview td{padding:6px 0;border-bottom:1px solid var(--line)}
+.overview td:last-child{text-align:right}
+.overview tr.cur td{font-weight:700}
+.overview button{border:none;background:none;color:var(--run);cursor:pointer;font:inherit;padding:0}
 </style>
 </head>
 <body>
 <main>
-  <p class="step" id="step"></p>
-  <div class="progress" id="progress"></div>
-  <div id="screen"></div>
-  <p class="err" id="err" role="alert"></p>
+  <section id="quiz">
+    <p class="step" id="step"></p>
+    <div class="progress" id="progress"></div>
+    <div id="screen"></div>
+    <p class="err" id="err" role="alert"></p>
+  </section>
+  <section id="plan" hidden></section>
 </main>
-<nav class="bar"><div>
+<nav class="bar" id="quizbar"><div>
   <button id="back">Back</button>
   <button id="next" class="primary">Next</button>
 </div></nav>
@@ -264,7 +314,7 @@ const SCREENS = [
     lead:'Check your answers. Tap Edit to change one.',
     render: () => `<div class="card"><table class="review">${reviewRows().map(([k,v,i]) =>
       `<tr><td>${k}</td><td>${esc(v)}<button type="button" data-goto="${i}">Edit</button></td></tr>`).join('')}</table></div>
-      <p class="quiet">The plan builder comes in the next update. Your answers are saved on this device.</p>`,
+      <p class="quiet">Your answers and plan are saved on this device only.</p>`,
     check: () => ''
   }
 ];
@@ -341,11 +391,341 @@ $('next').addEventListener('click', () => {
   const msg = SCREENS[idx].check();
   if (msg){ $('err').textContent = msg; return; }
   if (idx < SCREENS.length-1){ idx++; render(); window.scrollTo(0,0); }
-  else { $('err').textContent = 'Answers saved. The plan builder is coming in the next update.'; }
+  else {
+    for (let i = 0; i < SCREENS.length; i++){ const m = SCREENS[i].check(); if (m){ idx = i; render(); $('err').textContent = m; return; } }
+    A.built = true; save(); showPlan();
+  }
 });
 $('back').addEventListener('click', () => { if (idx > 0){ idx--; render(); window.scrollTo(0,0); } });
 
-render();
+// =====================================================================
+// PLAN ENGINE (v0.2 skeleton). Rules come from the Rules Spec doc.
+// Everything is computed in miles; converted for display.
+// =====================================================================
+const KM = 1.609344;
+const LEVEL = {new:'new', some:'some', regular:'regular'};
+// Peak weekly volume bands (mi) by distance and experience
+const BANDS = {
+  '5K':  {new:[10,15], some:[20,30], regular:[30,45]},
+  '10K': {new:[12,18], some:[22,32], regular:[32,50]},
+  'Half':{new:[20,25], some:[25,35], regular:[35,50]},
+  'Full':{new:[35,45], some:[40,55], regular:[55,65]}
+};
+// Minimum starting volume a plan needs (mi/week)
+const FLOOR = {'5K':6, '10K':8, 'Half':8, 'Full':10};
+// Long run share of the week by run days
+const LONG_SHARE = {3:0.40, 4:0.33, 5:0.30, 6:0.27};
+// Long run the plan builds toward by the peak phase (mi), before time/distance caps
+const LR_PEAK = {
+  '5K':{new:5, some:7, regular:9}, '10K':{new:6, some:8, regular:10},
+  'Half':{new:10, some:12, regular:13}, 'Full':{new:16, some:18, regular:20}
+};
+const DIST_MI = {'1 mile':1, '5K':3.107, '10K':6.214, 'Half':13.109, 'Full':26.219};
+const PHASE_NAME = {base:'Base', build:'Build', peak:'Peak', taper:'Taper'};
+const PHASE_NOTE = {
+  base:'Building the engine. Mostly easy running, with short fast strides and hills to stay sharp.',
+  build:'Quality work ramps up. Hard days are hard, easy days stay truly easy.',
+  peak:'Race-specific work. The biggest weeks of the plan.',
+  taper:'Less volume, same sharpness. Trust the training.'
+};
+
+function volMi(){ const v = +A.volume || 0; return A.units === 'km' ? v / KM : v; }
+function fmtDist(mi){ const v = A.units === 'km' ? mi * KM : mi; return (Math.round(v * 2) / 2).toString().replace(/\.0$/, '') + ' ' + A.units; }
+function addDays(d, n){ const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+const r5 = x => Math.round(x * 2) / 2;
+
+// Easy pace (min/mi) from the benchmark, or a default by experience
+function easyPace(){
+  if (A.benchKind !== 'none' && secs(A.benchTime)){
+    const d = DIST_MI[A.benchDist];
+    const t5k = secs(A.benchTime) * Math.pow(3.107 / d, 1.06);   // Riegel to a 5K equivalent
+    return Math.min(14, Math.max(7, (t5k / 60 / 3.107) * 1.32)); // easy ≈ 5K pace + ~30%
+  }
+  return {new:12, some:10.5, regular:9.25}[A.experience];
+}
+
+function planWeeks(){
+  if (A.timeline === 'race'){
+    const days = Math.round((parseDate(A.raceDate) - parseDate(A.startDate)) / 864e5);
+    return Math.floor(days / 7) + 1;
+  }
+  return +A.weeks;
+}
+
+// Base -> build -> peak -> taper. Base grows with the gap between start and target volume.
+function phaseList(N, gap){
+  const D = A.distance;
+  const taper = D === 'Full' ? (N >= 16 ? 3 : 2) : D === 'Half' ? (N >= 10 ? 2 : 1) : 1;
+  let peak = (D === 'Full' || D === 'Half') ? 3 : 2;
+  if (N < 8) peak = Math.max(1, peak - 1);
+  peak = Math.min(peak, Math.max(1, N - taper));
+  const rest = Math.max(0, N - taper - peak);
+  let base = rest < 2 ? rest : Math.min(rest - 1, Math.max(1, Math.round(rest * (0.4 + 0.3 * gap))));
+  const build = rest - base;
+  return [...Array(base).fill('base'), ...Array(build).fill('build'), ...Array(peak).fill('peak'), ...Array(taper).fill('taper')];
+}
+
+// Step-up ramp: hold a level, then step. Normal = 3 weeks + a cutback week; compressed = 2-week holds.
+function rampVolumes(start, target, rampWeeks, notes){
+  if (rampWeeks <= 0 || target <= start) return {levels: Array(rampWeeks).fill(start), cut: Array(rampWeeks).fill(false), peak: Math.max(start, target)};
+  const tryMode = h => { const B = Math.ceil(rampWeeks / h); return {h, B, r: Math.pow(target / start, 1 / B)}; };
+  let m = tryMode(4), mode = 'normal';
+  if (m.r - 1 > 0.15){ m = tryMode(2); mode = 'compressed'; }
+  let peak = target;
+  if (m.r - 1 > 0.20){ m.r = 1.20; peak = start * Math.pow(1.2, m.B); mode = 'compressed'; notes.outkick = {peak, target}; }
+  if (mode === 'compressed') notes.compressed = true;
+  const levels = [], cut = [];
+  for (let w = 0; w < rampWeeks; w++){
+    const block = Math.floor(w / m.h), inBlock = w % m.h;
+    let v = start * Math.pow(m.r, block);
+    const c = mode === 'normal' && inBlock === 3;            // cutback week
+    if (c) v *= 0.8;
+    levels.push(v); cut.push(c);
+  }
+  return {levels, cut, peak};
+}
+
+// Which weekday (0=Mon..6=Sun) gets which role
+function weekLayout(){
+  const n = +A.days, L = DAYS.indexOf(A.longDay), Q = DAYS.indexOf(A.qualityDay);
+  const roles = Array(7).fill('off');
+  roles[L] = 'L'; roles[Q] = 'Q';
+  const dist = (a, b) => { const g = Math.abs(a - b); return Math.min(g, 7 - g); };
+  // Tempo: as far from both the long run and the quality day as possible, prefer after the quality day
+  let best = -1, bestScore = -1;
+  for (let d = 0; d < 7; d++){
+    if (roles[d] !== 'off') continue;
+    const score = Math.min(dist(d, L), dist(d, Q)) * 10 + ((d - Q + 7) % 7 < (Q - d + 7) % 7 ? 1 : 0);
+    if (score > bestScore){ bestScore = score; best = d; }
+  }
+  roles[best] = 'T';
+  // Extra easy days: recovery after the long run, then around the quality day; never the day before the long run unless needed
+  const T = best;
+  const pref = [(L + 1) % 7, (Q + 1) % 7, (Q + 6) % 7, (T + 1) % 7, (T + 6) % 7, 0,1,2,3,4,5,6, (L + 6) % 7];
+  let extra = n - 3;
+  for (const d of pref){
+    if (extra <= 0) break;
+    if (roles[d] !== 'off' || (d === (L + 6) % 7 && pref.indexOf(d) < pref.length - 1)) continue;
+    roles[d] = (d === (L + 1) % 7 && n >= 5) ? 'R' : 'E'; extra--;
+  }
+  for (let d = 0; extra > 0 && d < 7; d++) if (roles[d] === 'off'){ roles[d] = 'E'; extra--; }
+  return roles;
+}
+
+function sessionTitle(role, phase, week, ctx){
+  const D = A.distance, lvl = A.experience, short = (D === '5K' || D === '10K');
+  if (role === 'Q'){
+    if (phase === 'base') return lvl === 'new' ? 'Easy + strides' : 'Hills or fartlek';
+    if (phase === 'build') return lvl === 'new' ? 'Fartlek' : short ? 'VO2 intervals' : 'Intervals';
+    if (phase === 'peak') return short ? 'Race-pace reps' : lvl === 'new' ? 'Fartlek' : 'Intervals';
+    return 'Race-pace touches';
+  }
+  if (role === 'T'){
+    if (phase === 'base') return lvl === 'new' ? 'Easy run' : 'Steady run';
+    if (phase === 'build') return lvl === 'new' ? 'Tempo (short)' : 'Tempo (float sets)';
+    if (phase === 'peak') return short ? 'Threshold (cruise intervals)' : D === 'Half' ? 'Half-marathon pace' : 'Steady run';
+    return 'Easy + strides';
+  }
+  if (role === 'L'){
+    if (phase === 'peak' && D === 'Full') return ctx.rehearsal ? 'Long run: dress rehearsal' : 'Long run with goal-pace miles';
+    if (phase === 'peak' && D === 'Half' && lvl !== 'new') return ctx.rehearsal ? 'Long run: dress rehearsal' : 'Long run, fast finish';
+    if (phase === 'peak' && ctx.rehearsal) return 'Long run: dress rehearsal';
+    return phase === 'taper' ? 'Long run (shorter)' : 'Long run';
+  }
+  if (role === 'E') return ctx.strides ? 'Easy + strides' : 'Easy run';
+  if (role === 'R') return 'Recovery run';
+  return 'Rest';
+}
+const HINT = {
+  Q:'Your hard day. Very hard efforts with very easy recoveries. Full workout details come in the next update.',
+  T:'Comfortably hard. Float sets keep you working near threshold without full stops.',
+  L:'Conversational the whole way. It is hard because of the distance, not the pace.',
+  E:'Truly easy. You should be able to hold a conversation.',
+  R:'Slower than easy. Just loosen up after the long run.',
+  RACE:'Race day. Start controlled, finish strong.',
+  TT:'Run your goal distance or a hard time trial to see where your fitness is.',
+  SH:'Short and easy, with a few strides to wake the legs up.',
+  off:'Rest, walk, or easy cross-training.'
+};
+
+function buildPlan(){
+  const notes = {};
+  const N = planWeeks();
+  const D = A.distance, lvl = A.experience, n = +A.days;
+  const pace = easyPace();
+  const band = BANDS[D][lvl];
+  const recent = volMi();
+  const start = Math.max(recent, FLOOR[D]);
+  if (start > recent + 0.5) notes.floor = start;
+  let target = start >= band[1] ? start * 1.05 : Math.min(band[1], Math.max(band[0], start * 1.25));
+  const gap = Math.max(0, Math.min(1, (target - start) / target));
+  const phases = phaseList(N, gap);
+  const rampWeeks = phases.filter(p => p === 'base' || p === 'build').length;
+  const ramp = rampVolumes(start, target, rampWeeks, notes);
+  const peakVol = rampWeeks ? ramp.peak : Math.max(start, Math.min(target, start * 1.1));
+  const taperMult = {3:[0.8,0.65,0.45], 2:[0.75,0.5], 1:[0.6]}[phases.filter(p => p === 'taper').length];
+  const layout = weekLayout();
+  const startDate = parseDate(A.startDate);
+  const raceDate = A.timeline === 'race' ? parseDate(A.raceDate) : null;
+  const timeCap = (D === '5K' || D === '10K') ? {new:60, some:75, regular:90}[lvl] : 150;
+  const distCap = D === 'Full' ? (lvl === 'regular' ? 22 : 20) : D === 'Half' ? 15 : 13;
+  const minRun = 25 / pace, minRec = 20 / pace;
+  const capMiAll = Math.min(timeCap / pace, distCap);
+  const peakIdx = phases.map((p, i) => p === 'peak' ? i : -1).filter(i => i >= 0);
+  const rehearsals = new Set(peakIdx.slice(0, 2));
+  const strengthN = +A.strength || 0;
+
+  let ti = 0, bestLR = 0;
+  const weeks = phases.map((phase, w) => {
+    let vol = phase === 'taper' ? peakVol * taperMult[ti++] : phase === 'peak' ? peakVol : ramp.levels[w];
+    const isLast = w === N - 1;
+    // Long run: the larger of its share of the week and a steady build toward the peak long run,
+    // never more than ~55% of the week, then capped by time and distance.
+    const startLR = start * LONG_SHARE[n];
+    const peakLR = Math.max(startLR, LR_PEAK[D][lvl]);
+    let longMi;
+    if (phase === 'taper') longMi = bestLR * taperMult[ti - 1];
+    else {
+      const f = phase === 'peak' ? 1 : (rampWeeks ? (w + 1) / (rampWeeks + 1) : 1);
+      longMi = Math.max(vol * LONG_SHARE[n], startLR + (peakLR - startLR) * f);
+      if (ramp.cut[w]) longMi *= 0.8;
+      longMi = Math.min(longMi, vol * 0.55);
+      if (longMi > capMiAll){ longMi = capMiAll; if (!(D === '5K' || D === '10K')) notes.capped = true; }
+      if (longMi / vol > 0.4) notes.share = true;
+      bestLR = Math.max(bestLR, longMi);
+    }
+    const rest = Math.max(0, vol - longMi);
+    const W = {Q:1.15, T:1.15, E:1, R:0.7};
+    const weightSum = layout.reduce((s, r) => s + (W[r] || 0), 0) || 1;
+    let stridesGiven = false;
+    const days = [];
+    for (let j = 0; j < 7; j++){
+      const date = addDays(startDate, w * 7 + j);
+      const wd = (date.getDay() + 6) % 7;
+      let role = layout[wd];
+      let miles = 0;
+      if (role === 'L') miles = longMi;
+      else if (W[role]) miles = Math.max(role === 'R' ? minRec : minRun, rest * W[role] / weightSum);
+      let ctx = {rehearsal: rehearsals.has(w)};
+      if (role === 'E' && !stridesGiven && phase !== 'taper' && !(phase === 'base' && lvl === 'new')){ ctx.strides = true; stridesGiven = true; }
+      let title = sessionTitle(role, phase, w, ctx), hintKey = role;
+      // Race week handling
+      if (raceDate && isLast){
+        const daysToRace = Math.round((raceDate - date) / 864e5);
+        if (daysToRace === 0){ role = 'RACE'; title = A.distance === 'Full' ? 'Race day: marathon' : A.distance === 'Half' ? 'Race day: half marathon' : 'Race day: ' + A.distance; miles = DIST_MI[A.distance]; hintKey = 'RACE'; }
+        else if (daysToRace < 0){ role = 'off'; title = 'Recover'; miles = 0; hintKey = 'off'; }
+        else if (daysToRace === 1){ role = 'off'; title = 'Rest'; miles = 0; hintKey = 'off'; }
+        else if (daysToRace === 2 && role !== 'off'){ role = 'E'; title = 'Shakeout + strides'; miles = minRec; hintKey = 'SH'; }
+        else if (role === 'L'){ role = 'E'; title = 'Easy run'; miles = minRun; hintKey = 'E'; }
+      } else if (!raceDate && isLast && role === 'L'){
+        title = 'Time trial or goal effort'; hintKey = 'TT'; miles = Math.max(DIST_MI[A.distance] + 2, minRun);
+      }
+      days.push({date, role, title, miles: miles ? r5(miles) : 0, hint: HINT[hintKey] || '', lift: null});
+    }
+    // Strength: on hard days first, never the day before the long run or on the long run
+    let sCount = phase === 'peak' ? Math.min(1, strengthN) : phase === 'taper' ? (isLast ? 0 : Math.min(1, strengthN)) : strengthN;
+    const dayBeforeLong = days.findIndex((d, i) => days[(i + 1) % 7] && days[i + 1] && days[i + 1].role === 'L');
+    const order = [...days.keys()].sort((a, b) => {
+      const rank = r => ({Q:0, T:1, E:2, off:3, R:4}[r] ?? 9);
+      return rank(days[a].role) - rank(days[b].role);
+    });
+    const used = [];
+    for (const i of order){
+      if (sCount <= 0) break;
+      const d = days[i];
+      if (['L','RACE'].includes(d.role) || i === dayBeforeLong) continue;
+      if (used.some(u => Math.abs(u - i) < 2)) continue;   // keep heavy sessions 48h apart
+      d.lift = used.length === 0 ? (phase === 'peak' || phase === 'taper' ? 'Strength: maintenance' : 'Strength: heavy day') : 'Strength: moderate day';
+      used.push(i); sCount--;
+    }
+    const total = days.reduce((s, d) => s + (d.role === 'RACE' ? 0 : d.miles), 0);
+    return {phase, days, total};
+  });
+  return {weeks, notes, N, pace, target, peakVol, start};
+}
+
+// ---------- plan view ----------
+let P = null, wk = 0;
+function showPlan(){
+  P = buildPlan();
+  $('quiz').hidden = true; $('quizbar').hidden = true; $('plan').hidden = false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const off = Math.floor((today - parseDate(A.startDate)) / (7 * 864e5));
+  wk = Math.min(Math.max(off, 0), P.N - 1);
+  drawPlan(); window.scrollTo(0, 0);
+}
+function showQuiz(){
+  $('plan').hidden = true; $('quiz').hidden = false; $('quizbar').hidden = false;
+  idx = SCREENS.length - 1; render(); window.scrollTo(0, 0);
+}
+function noteList(){
+  const N = P.notes, out = [];
+  if (+A.days === 3) out.push('On 3 run days, the long run is a big share of your week. A 4th short, easy run would make the plan easier on your body.');
+  if (N.floor) out.push(`Week 1 starts at about ${fmtDist(N.floor)}, a bit above your recent volume, because this plan needs a minimum base.`);
+  if (N.outkick) out.push(`Your timeline can't safely reach this plan's usual peak of ${fmtDist(N.outkick.target)}. It tops out near ${fmtDist(N.outkick.peak)}. A later race or shorter distance would help, or treat this as a finish-focused plan.`);
+  else if (N.compressed) out.push('Short timeline: volume steps up every 2 weeks with no cutback weeks. Back off if you feel run down.');
+  if (N.capped) out.push(`Long runs are capped at about 2.5 hours (around ${fmtDist(150 / P.pace)} at your easy pace). Your weekly miles do the rest of the endurance work.`);
+  if (N.share) out.push('Your long run is more than 40% of some weeks. Adding a short run or a midweek medium-long run would spread the load.');
+  if (A.benchKind === 'aspire') out.push('Your paces come from a best-guess time. Run a time trial in week 3 or 4 to check them.');
+  out.push('Not medical advice. Listen to your body and adjust.');
+  return out;
+}
+function drawPlan(){
+  const W = P.weeks[wk];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const first = W.days[0].date, last = W.days[6].date;
+  const fmt = d => d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+  const maxMi = Math.max(...P.weeks.flatMap(w => w.days.map(d => d.miles)), 1);
+  const notes = noteList();
+  const strip = W.days.map((d, i) => {
+    const h = d.miles ? Math.max(8, Math.round(44 * d.miles / maxMi)) : 0;
+    const isToday = +d.date === +today;
+    return `<a href="#d${i}" class="${isToday ? 'is-today' : ''}"><span class="bars">
+      ${d.miles ? `<span class="bar-run ${d.role === 'RACE' ? 'race' : ''}" style="height:${h}px"></span>` : ''}
+      ${d.lift ? '<span class="bar-lift"></span>' : ''}${!d.miles && !d.lift ? '<span class="bar-rest"></span>' : ''}
+      </span>${DAYS[(d.date.getDay() + 6) % 7].slice(0,2)}</a>`;
+  }).join('');
+  const cards = W.days.map((d, i) => {
+    const isToday = +d.date === +today;
+    const sum = [d.miles ? fmtDist(d.miles) : '', d.lift ? 'Strength' : ''].filter(Boolean).join(' · ') || 'Rest day';
+    return `<details class="day ${isToday ? 'is-today' : ''}" id="d${i}" ${isToday ? 'open' : ''}>
+      <summary><span class="dnum">${d.date.getDate()}</span>
+        <span><span class="dn">${DAYS[(d.date.getDay() + 6) % 7]} · ${esc(d.title)}</span><br><span class="sumline">${sum}</span></span>
+        <span class="dots">${d.miles ? '<i class="dot run"></i>' : ''}${d.lift ? '<i class="dot lift"></i>' : ''}</span></summary>
+      <div class="daybody">
+        ${d.role !== 'off' || d.miles ? `<div class="item run"><h3>${esc(d.title)}${d.miles ? ' · ' + fmtDist(d.miles) : ''}</h3><p>${esc(d.hint)}</p></div>` : `<div class="item"><p>${esc(d.hint)}</p></div>`}
+        ${d.lift ? `<div class="item lift"><h3>${esc(d.lift)}</h3><p>${esc(liftHint(d.lift))}</p></div>` : ''}
+      </div></details>`;
+  }).join('');
+  const overview = P.weeks.map((w, i) => `<tr class="${i === wk ? 'cur' : ''}"><td><button data-week="${i}">Week ${i+1}</button></td><td>${PHASE_NAME[w.phase]}</td><td>${fmtDist(w.total)}</td></tr>`).join('');
+  $('plan').innerHTML = `
+    <p class="phase">${PHASE_NAME[W.phase]} phase · ${esc(A.distance)} plan</p>
+    <div class="weekrow"><div>
+      <p class="weekno">Week ${wk + 1}<small> / ${P.N}</small></p>
+      <p class="dates">${fmt(first)} – ${fmt(last)} · ${fmtDist(W.total)}</p></div>
+      <div class="nav"><button id="pprev" aria-label="Previous week" ${wk === 0 ? 'disabled' : ''}>‹</button>
+      <button id="pnext" aria-label="Next week" ${wk === P.N - 1 ? 'disabled' : ''}>›</button></div></div>
+    <p class="weeknote">${PHASE_NOTE[W.phase]}</p>
+    <div class="strip">${strip}</div>
+    <div class="legend"><span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}</div>
+    ${cards}
+    <details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
+      <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul></details>
+    <details class="card notes"><summary>All weeks</summary><table class="overview">${overview}</table></details>
+    <div class="planbtns"><button id="editans">Edit answers</button></div>`;
+  $('pprev').onclick = () => { if (wk > 0){ wk--; drawPlan(); } };
+  $('pnext').onclick = () => { if (wk < P.N - 1){ wk++; drawPlan(); } };
+  $('editans').onclick = showQuiz;
+  $('plan').querySelectorAll('[data-week]').forEach(b => b.onclick = () => { wk = +b.dataset.week; drawPlan(); window.scrollTo(0, 0); });
+}
+function liftHint(t){
+  const eq = {bw:'Bodyweight', db:'Dumbbells/kettlebells', bb:'Barbell'}[A.equipment] || '';
+  if (t.includes('heavy')) return `${eq}: 1–2 hard sets of your big lift, plus plyos. After your run, ideally 6+ hours later. Template details come in a later update.`;
+  if (t.includes('maintenance')) return `${eq}: one short session to hold your strength. Keep it well short of fatigue.`;
+  return `${eq}: moderate single-leg work, calves and core.`;
+}
+
+if (A.built) showPlan(); else render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register("bb-sw.js").catch(() => {}));

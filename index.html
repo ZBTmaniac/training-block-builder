@@ -690,28 +690,97 @@ function workoutSteps(d, phase, f, k, pace){
 }
 
 // ---------- strength templates ----------
+// Exercises: [name, prescription, swap]. Prescriptions with {rx} take the phase's heavy-lift dose.
 const LIFTS = {
   bb: {
-    heavy: rx => [`Trap bar deadlift or back squat: ${rx}`, 'Bulgarian split squat: 3 × 6/leg', 'Single-leg RDL: 3 × 8/leg', 'Bent-knee calf raise, heavy: 3 × 10–12', 'Box jumps: 3 × 4, full reset each rep', 'Pallof press: 2 × 10/side'],
-    moderate: ['Goblet or front squat: 3 × 8', 'Step-ups: 3 × 8/leg', 'Hip thrust: 3 × 10', 'Single-leg calf raise: 3 × 15', 'Rows and push-ups: 2 × 10 each', 'Side plank: 2 × 30 s/side']
+    main:['Trap bar deadlift or back squat', '{rx}', 'Goblet squat or dumbbell RDL'],
+    heavy: [
+      ['Bulgarian split squat', '{acc} × 6/leg', 'Reverse lunge'],
+      ['Single-leg RDL', '{acc} × 8/leg', 'Kickstand RDL (back toe down for balance)'],
+      ['Bent-knee calf raise, heavy', '{acc} × 10–12', 'Seated calf raise or single-leg calf raise'],
+      ['Box jumps', '3 × 4, full reset each rep', 'Squat jumps (no box needed)'],
+      ['Pallof press', '2 × 10/side', 'Side plank']],
+    moderate: [
+      ['Goblet or front squat', '{acc} × 8', 'Box squat'],
+      ['Step-ups', '{acc} × 8/leg', 'Reverse lunge'],
+      ['Hip thrust', '{acc} × 10', 'Glute bridge'],
+      ['Single-leg calf raise', '{acc} × 15', 'Two-leg calf raise, slow down'],
+      ['Rows and push-ups', '2 × 10 each', 'Incline push-ups or landmine press if pressing bothers your shoulder'],
+      ['Side plank', '2 × 30 s/side', 'Bird dog']],
+    power: [
+      ['Trap bar jump, light', '3 × 3, explosive', 'Kettlebell swing 3 × 10'],
+      ['Split squat jumps', '3 × 5/leg', 'Step-up drive with knee punch'],
+      ['Bounding', '3 × 20 m', 'Skips for height'],
+      ['Pull-ups or rows', '3 × 6–8', 'Band pull-apart'],
+      ['Dead bug', '2 × 8/side', 'Plank']],
+    maint: ['Trap bar deadlift or back squat', '2 × 3 at RPE 7', 'Goblet squat'],
+    load: 'add 5–10 lb (2.5–5 kg) to the bar next time'
   },
   db: {
-    heavy: rx => [`Heavy goblet squat or dumbbell split squat: ${rx}`, 'Single-leg RDL with a dumbbell or kettlebell: 3 × 6–8/leg', 'Weighted step-up: 3 × 6/leg', 'Single-leg calf raise holding a dumbbell: 3 × 10–12', 'Pogo hops: 3 × 20 s', 'Suitcase carry: 3 × 30 m/side'],
-    moderate: ['Reverse lunge: 3 × 8/leg', 'Kettlebell swing: 3 × 15', 'Lateral lunge: 2 × 8/side', 'Calf raise: 3 × 15', 'Dumbbell row and push-ups: 2 × 10 each', 'Dead bug: 2 × 8/side']
+    main:['Heavy goblet squat or dumbbell split squat', '{rx}', 'Bodyweight split squat with a slow 3 s lower'],
+    heavy: [
+      ['Single-leg RDL with a dumbbell or kettlebell', '{acc} × 6–8/leg', 'Two-leg dumbbell RDL'],
+      ['Weighted step-up', '{acc} × 6/leg', 'Reverse lunge holding dumbbells'],
+      ['Single-leg calf raise holding a dumbbell', '{acc} × 10–12', 'Two-leg calf raise, slow down'],
+      ['Pogo hops', '3 × 20 s', 'Jump rope'],
+      ['Suitcase carry', '3 × 30 m/side', 'Side plank']],
+    moderate: [
+      ['Reverse lunge', '{acc} × 8/leg', 'Split squat'],
+      ['Kettlebell swing', '{acc} × 15', 'Dumbbell RDL'],
+      ['Lateral lunge', '2 × 8/side', 'Lateral band walk'],
+      ['Calf raise', '{acc} × 15', 'Single-leg calf raise'],
+      ['Dumbbell row and push-ups', '2 × 10 each', 'Incline push-ups if pressing bothers your shoulder'],
+      ['Dead bug', '2 × 8/side', 'Plank']],
+    power: [
+      ['Kettlebell swing, hard', '4 × 10', 'Dumbbell jump squat, light'],
+      ['Jump squats', '3 × 5', 'Pogo hops'],
+      ['Split squat jumps', '3 × 5/leg', 'Step-up drive'],
+      ['Dumbbell row', '3 × 8/arm', 'Band row'],
+      ['Half-kneeling dumbbell press', '2 × 8/arm', 'Landmine press or skip if your shoulder objects']],
+    maint: ['Heavy goblet or dumbbell split squat', '2 × 5 at RPE 7', 'Split squat'],
+    load: 'move up to the next dumbbell or kettlebell size, or add 1–2 reps first'
   },
   bw: {
-    heavy: rx => [`Bulgarian split squat with a loaded backpack: ${rx}`, 'Single-leg RDL holding the backpack: 3 × 10/leg', 'High step-up (knee-height box): 3 × 10/leg', 'Single-leg calf raise, slow on the way down: 3 × 15–20', 'Skater hops: 3 × 6/side', 'Plank: 3 × 45 s'],
-    moderate: ['Circuit, 2–3 rounds:', 'Walking lunges × 10/leg', 'Glute bridge × 15', 'Calf raises × 20', 'Push-ups × 10', 'Side plank × 30 s/side']
+    main:['Bulgarian split squat with a loaded backpack', '{rx}', 'Reverse lunge with the backpack'],
+    heavy: [
+      ['Single-leg RDL holding the backpack', '{acc} × 10/leg', 'Two-leg RDL with the backpack'],
+      ['High step-up (knee-height box)', '{acc} × 10/leg', 'Lower step-up, slow down'],
+      ['Single-leg calf raise, slow on the way down', '{acc} × 15–20', 'Two-leg calf raise'],
+      ['Skater hops', '3 × 6/side', 'Lateral step-and-stick'],
+      ['Plank', '3 × 45 s', 'Dead bug']],
+    moderate: [
+      ['Circuit, {acc} rounds', 'Walking lunges × 10/leg · Glute bridge × 15 · Calf raises × 20 · Push-ups × 10 · Side plank × 30 s/side', 'Incline push-ups if pressing bothers your shoulder']],
+    power: [
+      ['Broad jumps', '4 × 3, stick each landing', 'Squat jumps'],
+      ['Split squat jumps', '3 × 5/leg', 'Step-up drive'],
+      ['Bounding', '3 × 20 m', 'Skips for height'],
+      ['Inverted rows (sturdy table or bar)', '3 × 8', 'Backpack rows'],
+      ['Push-ups', '2 × 10', 'Incline push-ups']],
+    maint: ['Bulgarian split squat with a loaded backpack', '2 × 6/leg', 'Reverse lunge'],
+    load: 'add about 5 lb (2 kg) to the pack, or slow the lowering'
   }
 };
-function liftSteps(t, phase){
-  const eq = LIFTS[A.equipment] ? A.equipment : 'bw';
-  if (t.includes('maintenance')) return ['Main lift from your heavy day: 2 sets, stop well short of fatigue', 'One single-leg move: 2 sets', 'Calf raises: 2 sets', 'Skip the jumps in the last 10 days before your race'];
-  if (t.includes('heavy')){
-    const rx = eq === 'bw' ? (phase === 'base' ? '3 × 10/leg' : '3 × 6–8/leg, add weight to the pack') : (phase === 'base' ? '3 × 6 at RPE 7' : '2–3 × 3–5 at RPE 8, heavy with clean reps');
-    return LIFTS[eq].heavy(rx);
+function liftSteps(t, phase, f, cut){
+  const L = LIFTS[A.equipment] ? LIFTS[A.equipment] : LIFTS.bw;
+  const eq = A.equipment || 'bw';
+  const acc = f >= 0.5 && !cut ? 3 : 2;                                  // accessory sets grow through each phase
+  const rx = eq === 'bw'
+    ? (phase === 'base' ? `${acc} × ${f < 0.5 ? 10 : 12}/leg` : `${acc} × 6–8/leg, add weight to the pack`)
+    : (phase === 'base' ? `${cut ? 2 : 3} × ${f < 0.5 ? 8 : 6} at RPE ${cut ? 6 : 7}` : cut ? '2 × 3–5 at RPE 7' : '3 × 3–5 at RPE 8, heavy with clean reps');
+  const line = ([name, pre, swap]) => `${name.replace('{acc}', acc)}: ${pre.replace('{rx}', rx).replace('{acc}', acc)}${swap ? ` · Swap: ${swap}` : ''}`;
+  const out = [];
+  if (cut) out.push('Cutback week: lighter on purpose. Sets are already reduced; keep effort around RPE 6–7 and drop a set from any jumps.');
+  if (t.includes('maintenance')){
+    out.push(line(L.maint), line(L.heavy[0]), line(L.heavy[2]), 'Skip the jumps in the last 10 days before your race');
+    return out;
   }
-  return LIFTS[eq].moderate;
+  if (t.includes('heavy')){
+    out.push(line(L.main), ...L.heavy.map(line));
+    if (!cut) out.push(`Progress: when every set of the main lift feels easier than its target RPE, ${L.load}.`);
+    return out;
+  }
+  if (t.includes('power')) return out.concat(L.power.map(line), ['Quality over quantity: stop a set when the jumps slow down.']);
+  return out.concat(L.moderate.map(line));
 }
 
 // ---------- goal check ----------
@@ -905,11 +974,11 @@ function buildPlan(){
       const d = days[i];
       if (['L','RACE'].includes(d.role) || i === dayBeforeLong) continue;
       if (used.some(u => Math.abs(u - i) < 2)) continue;   // keep heavy sessions 48h apart
-      d.lift = used.length === 0 ? (phase === 'peak' || phase === 'taper' ? 'Strength: maintenance' : 'Strength: heavy day') : 'Strength: moderate day';
+      d.lift = used.length === 0 ? (phase === 'peak' || phase === 'taper' ? 'Strength: maintenance' : 'Strength: heavy day') : used.length === 1 ? 'Strength: moderate day' : 'Strength: power day';
       used.push(i); sCount--;
     }
     const total = days.reduce((s, d) => s + (d.role === 'RACE' ? 0 : d.miles), 0);
-    return {phase, days, total};
+    return {phase, days, total, cut: !!(ramp.cut && ramp.cut[w])};
   });
   // Fill in workouts: progress (0..1) through each phase drives rep counts
   const pCount = {}, pSeen = {};
@@ -919,7 +988,7 @@ function buildPlan(){
     const f = pCount[W.phase] > 1 ? (k - 1) / (pCount[W.phase] - 1) : 1;
     W.days.forEach(d => {
       d.steps = workoutSteps(d, W.phase, f, k, pace);
-      if (d.lift) d.liftSteps = liftSteps(d.lift, W.phase);
+      if (d.lift) d.liftSteps = liftSteps(d.lift, W.phase, f, W.cut);
     });
   });
   return {weeks, notes, N, pace, target, peakVol, start, goal: goalCheck(N)};
@@ -1033,6 +1102,7 @@ function goalCard(){
 function liftHint(t){
   const eq = {bw:'Bodyweight', db:'Dumbbells/kettlebells', bb:'Barbell'}[A.equipment] || '';
   if (t.includes('heavy')) return `${eq}. After your run, ideally 6+ hours later. The first lift is the heavy one; the rest support it.`;
+  if (t.includes('power')) return `${eq}. Fast, springy work for running power. Fresh legs matter more than fatigue here.`;
   if (t.includes('maintenance')) return `${eq}. One short session to hold your strength without adding fatigue.`;
   return `${eq}. Moderate effort, finish feeling like you had more in the tank.`;
 }

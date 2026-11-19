@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Block Builder">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Training Block Builder</title>
+<link rel="manifest" href="bb-manifest.json">
+<link rel="apple-touch-icon" href="bb-icon-180.png">
+<link rel="icon" type="image/png" href="bb-icon-512.png">
+<meta name="theme-color" content="#1E2422">
+<style>
+:root{
+  --bg:#E9ECE6; --surface:#F6F7F3; --ink:#1E2422; --muted:#5E6762; --line:#CBD1CA;
+  --run:#2F55A4; --bike:#1F7A68; --lift:#B4721A; --rest:#9AA39E;
+  --display:"Avenir Next Condensed","DIN Condensed","Arial Narrow",sans-serif;
+  --body:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#151A1D; --surface:#1E2529; --ink:#E4E8E3; --muted:#9AA49F; --line:#313A3F;
+    --run:#86A3E6; --bike:#5CC0A8; --lift:#E0A44E; --rest:#5E6762;
+    color-scheme:dark;
+  }
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+main{max-width:640px;margin:0 auto;padding:16px 16px 120px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--run);outline-offset:2px}
+
+.step{font-size:14px;color:var(--muted);margin:4px 0 0}
+h1{font-family:var(--display);font-weight:700;font-size:44px;line-height:.95;letter-spacing:-.5px;margin:6px 0 6px}
+.lead{color:var(--muted);margin:0 0 18px;font-size:15px}
+.progress{display:flex;gap:5px;margin:10px 0 0}
+.progress i{flex:1;height:4px;border-radius:2px;background:var(--line)}
+.progress i.on{background:var(--run)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 0 12px}
+.card h3{margin:0 0 4px;font-size:17px}
+.card .sub{margin:0 0 10px;font-size:14px;color:var(--muted)}
+
+.choices{display:grid;gap:8px}
+.choices.two{grid-template-columns:1fr 1fr}
+.choices.row{grid-template-columns:repeat(auto-fit,minmax(56px,1fr))}
+.choice{display:block;text-align:left;width:100%;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:12px 14px;cursor:pointer}
+.choices.row .choice{text-align:center;padding:12px 4px}
+.choice b{display:block;font-weight:600}
+.choice span{display:block;font-size:13px;color:var(--muted)}
+.choice[aria-pressed="true"]{border:2px solid var(--run);padding:11px 13px;background:var(--surface)}
+.choices.row .choice[aria-pressed="true"]{padding:11px 3px}
+
+label.field{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
+label.field:last-child{border-bottom:none}
+label.field input,label.field select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:150px;min-width:0}
+.time{display:flex;gap:4px;align-items:center}
+.time input{width:52px!important;text-align:center;padding:8px 4px!important}
+
+.flag{border-left:3px solid var(--lift);padding:2px 0 2px 12px;margin:12px 0 0;font-size:14px}
+.flag b{color:var(--lift)}
+.err{color:#B3261E;font-size:14px;margin:10px 0 0;min-height:1em}
+@media (prefers-color-scheme: dark){.err{color:#F2B8B5}}
+
+.review{width:100%;border-collapse:collapse;font-size:15px}
+.review td{padding:9px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.review td:first-child{color:var(--muted);width:42%}
+.review td:last-child{text-align:right}
+.review button{border:none;background:none;color:var(--run);cursor:pointer;padding:0 0 0 8px;font-size:14px}
+
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+.bar div{max-width:640px;margin:0 auto;display:flex;gap:10px}
+.bar button{flex:1;height:48px;border-radius:24px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:600}
+.bar button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.bar button[hidden]{display:none}
+.quiet{font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <p class="step" id="step"></p>
+  <div class="progress" id="progress"></div>
+  <div id="screen"></div>
+  <p class="err" id="err" role="alert"></p>
+</main>
+<nav class="bar"><div>
+  <button id="back">Back</button>
+  <button id="next" class="primary">Next</button>
+</div></nav>
+
+<script>
+// ---------- state ----------
+const KEY = 'tbb-answers-v1';
+const DEFAULTS = {
+  distance:null, experience:null, units:'mi', volume:'',
+  timeline:'race', raceDate:'', weeks:12, startDate:nextMonday(),
+  benchKind:'race', benchDist:'5K', benchTime:{h:'',m:'',s:''}, goalTime:{h:'',m:'',s:''},
+  days:null, longDay:'Sat', qualityDay:'Tue',
+  strength:null, equipment:null
+};
+let A = load();
+let idx = 0;
+
+function load(){
+  try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY)) || {}); }
+  catch(e){ return Object.assign({}, DEFAULTS); }
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(A)); } catch(e){} }
+
+// ---------- helpers ----------
+function nextMonday(){
+  const d = new Date(); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));
+  return iso(d);
+}
+function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function parseDate(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function weeksBetween(a,b){ return Math.floor((parseDate(b) - parseDate(a)) / (7*864e5)); }
+function secs(t){ const h=+t.h||0, m=+t.m||0, s=+t.s||0; return h*3600+m*60+s; }
+function fmtTime(t){ const x=secs(t); if(!x) return '—'; const h=Math.floor(x/3600), m=Math.floor(x%3600/60), s=x%60;
+  return (h? h+':'+String(m).padStart(2,'0') : m)+':'+String(s).padStart(2,'0'); }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+function choices(name, opts, cls=''){
+  return `<div class="choices ${cls}">` + opts.map(o =>
+    `<button type="button" class="choice" data-name="${name}" data-val="${esc(o.v)}" aria-pressed="${String(A[name])===String(o.v)}">
+       <b>${esc(o.label)}</b>${o.sub ? `<span>${esc(o.sub)}</span>` : ''}</button>`).join('') + '</div>';
+}
+function timeInputs(name){
+  const t = A[name];
+  return `<span class="time">
+    <input inputmode="numeric" maxlength="2" placeholder="h" data-time="${name}" data-part="h" value="${esc(t.h)}" aria-label="hours">:
+    <input inputmode="numeric" maxlength="2" placeholder="mm" data-time="${name}" data-part="m" value="${esc(t.m)}" aria-label="minutes">:
+    <input inputmode="numeric" maxlength="2" placeholder="ss" data-time="${name}" data-part="s" value="${esc(t.s)}" aria-label="seconds"></span>`;
+}
+function daySelect(name){
+  return `<select data-field="${name}">` + DAYS.map(d => `<option ${A[name]===d?'selected':''}>${d}</option>`).join('') + '</select>';
+}
+
+// ---------- screens ----------
+const SCREENS = [
+  {
+    title:'What are you training for?',
+    lead:'Pick your goal distance. You can build another plan any time.',
+    render: () => choices('distance', [
+      {v:'5K', label:'5K', sub:'3.1 mi'}, {v:'10K', label:'10K', sub:'6.2 mi'},
+      {v:'Half', label:'Half marathon', sub:'13.1 mi'}, {v:'Full', label:'Marathon', sub:'26.2 mi'}
+    ], 'two'),
+    check: () => A.distance ? '' : 'Pick a distance to continue.'
+  },
+  {
+    title:'Where are you starting?',
+    lead:'This sets your starting volume. Plans build from where you are now, not where you want to be.',
+    render: () => `
+      <div class="card"><h3>Running experience</h3>
+      ${choices('experience', [
+        {v:'new', label:'New to running', sub:'Little or no regular running yet'},
+        {v:'some', label:"I've trained before", sub:'Done a plan or a few races'},
+        {v:'regular', label:'I train regularly', sub:'Structured training most of the year'}
+      ])}</div>
+      <div class="card"><h3>Recent weekly volume</h3>
+      <p class="sub">Your average over the last 4 weeks. 0 is fine.</p>
+      <label class="field">Per week <input type="number" inputmode="decimal" min="0" data-field="volume" value="${esc(A.volume)}" placeholder="e.g. 15"></label>
+      <div style="margin-top:10px">${choices('units', [{v:'mi',label:'Miles'},{v:'km',label:'Kilometers'}], 'two')}</div>
+      </div>`,
+    check: () => {
+      if (!A.experience) return 'Pick your experience level.';
+      if (A.volume === '' || isNaN(+A.volume) || +A.volume < 0) return 'Enter your recent weekly volume (0 is fine).';
+      if (+A.volume > (A.units==='mi'?150:240)) return 'That volume looks too high. Check the units.';
+      return '';
+    }
+  },
+  {
+    title:'When is it?',
+    lead:'Training for a race? Use its date. Otherwise pick a plan length.',
+    render: () => `
+      <div class="card">${choices('timeline', [{v:'race',label:'Race date'},{v:'length',label:'Plan length'}], 'two')}
+      <div style="margin-top:8px">
+        <label class="field">Start date <input type="date" data-field="startDate" value="${esc(A.startDate)}"></label>
+        ${A.timeline==='race'
+          ? `<label class="field">Race date <input type="date" data-field="raceDate" value="${esc(A.raceDate)}"></label>`
+          : `<label class="field">Weeks <select data-field="weeks">${[6,8,10,12,14,16,18,20].map(w=>`<option ${+A.weeks===w?'selected':''}>${w}</option>`).join('')}</select></label>`}
+      </div>${timelineNote()}</div>`,
+    check: () => {
+      if (!A.startDate) return 'Pick a start date.';
+      if (A.timeline==='race'){
+        if (!A.raceDate) return 'Pick your race date.';
+        const w = weeksBetween(A.startDate, A.raceDate);
+        if (w < 3) return 'The race needs to be at least 3 weeks after your start date.';
+        if (w > 30) return 'That race is over 30 weeks out. Start later, or pick a plan length for now.';
+      }
+      return '';
+    }
+  },
+  {
+    title:'How fast are you now?',
+    lead:'A recent result sets your training paces. No recent race? Use a time you think you could run today, and the plan will check it with a time trial in week 3 or 4.',
+    render: () => `
+      <div class="card"><h3>Your benchmark</h3>
+      ${choices('benchKind', [{v:'race',label:'Recent result',sub:'Race or time trial'},{v:'aspire',label:'Best guess',sub:'Labeled aspirational'},{v:'none',label:'Skip',sub:'Train by feel'}])}
+      ${A.benchKind!=='none' ? `<div style="margin-top:8px">
+        <label class="field">Distance <select data-field="benchDist">${['1 mile','5K','10K','Half','Full'].map(d=>`<option ${A.benchDist===d?'selected':''}>${d}</option>`).join('')}</select></label>
+        <label class="field">Time ${timeInputs('benchTime')}</label></div>` : ''}
+      </div>
+      <div class="card"><h3>Goal time <span class="quiet">(optional)</span></h3>
+      <p class="sub">We'll tell you how it compares with where your fitness is likely to be on race day.</p>
+      <label class="field">${esc(A.distance||'Race')} goal ${timeInputs('goalTime')}</label></div>`,
+    check: () => {
+      for (const n of ['benchTime','goalTime']) {
+        const t = A[n];
+        if ([t.m,t.s].some(v => v!=='' && (isNaN(+v) || +v>59)) || (t.h!=='' && isNaN(+t.h))) return 'Times use hours, minutes (0–59) and seconds (0–59).';
+      }
+      if (A.benchKind!=='none' && !secs(A.benchTime)) return 'Enter your benchmark time, or choose Skip.';
+      return '';
+    }
+  },
+  {
+    title:'How many days a week?',
+    lead:'Count running days only. We recommend 4 to 6.',
+    render: () => `
+      <div class="card">${choices('days', [3,4,5,6].map(n => ({v:n, label:String(n)})), 'row')}
+      ${+A.days===3 ? `<p class="flag"><b>Heads up:</b> on 3 days, the long run carries a big share of the week, which is hard on bones and tendons. A 4th short, easy run helps a lot. You can still go with 3.</p>` : ''}
+      </div>
+      <div class="card"><h3>Your week</h3>
+      <label class="field">Long run day ${daySelect('longDay')}</label>
+      <label class="field">Hard workout day ${daySelect('qualityDay')}</label>
+      <p class="quiet" style="margin:8px 0 0">Your hard workout can be on a track, road or treadmill.</p></div>`,
+    check: () => {
+      if (!A.days) return 'Pick how many days you can run.';
+      if (A.longDay === A.qualityDay) return 'Put your long run and hard workout on different days.';
+      const gap = Math.abs(DAYS.indexOf(A.longDay) - DAYS.indexOf(A.qualityDay));
+      if (Math.min(gap, 7-gap) < 2) return 'Leave at least one day between your long run and hard workout.';
+      return '';
+    }
+  },
+  {
+    title:'Strength training',
+    lead:'Lifting protects joints, tendons and bones, holds your form late in races, and builds the power that makes you faster. Any amount helps.',
+    render: () => `
+      <div class="card"><h3>Days per week</h3>
+      ${choices('strength', [{v:0,label:'None'},{v:1,label:'1'},{v:2,label:'2'},{v:3,label:'3'}], 'row')}</div>
+      ${+A.strength>0 || A.strength===null ? `<div class="card"><h3>What equipment do you have?</h3>
+      ${choices('equipment', [
+        {v:'bw', label:'Bodyweight', sub:'No equipment, or a backpack you can load'},
+        {v:'db', label:'Dumbbells or kettlebells', sub:'At home or at the gym'},
+        {v:'bb', label:'Barbell or full gym', sub:'Rack, bar and plates'}
+      ])}</div>` : ''}
+      ${strengthNote()}`,
+    check: () => {
+      if (A.strength === null) return 'Pick how many strength days you want, or None.';
+      if (+A.strength > 0 && !A.equipment) return 'Pick the equipment you have.';
+      return '';
+    }
+  },
+  {
+    title:'Review',
+    lead:'Check your answers. Tap Edit to change one.',
+    render: () => `<div class="card"><table class="review">${reviewRows().map(([k,v,i]) =>
+      `<tr><td>${k}</td><td>${esc(v)}<button type="button" data-goto="${i}">Edit</button></td></tr>`).join('')}</table></div>
+      <p class="quiet">The plan builder comes in the next update. Your answers are saved on this device.</p>`,
+    check: () => ''
+  }
+];
+
+function timelineNote(){
+  if (A.timeline!=='race' || !A.raceDate || !A.startDate) return '';
+  const w = weeksBetween(A.startDate, A.raceDate);
+  return w >= 3 ? `<p class="quiet" style="margin:10px 0 0">That's a ${w}-week plan.</p>` : '';
+}
+function strengthNote(){
+  if (A.strength === null) return '';
+  if (+A.strength === 0) return `<p class="flag"><b>Worth reconsidering:</b> runners who lift get hurt less and hold their form better late in races. Even one session a week helps. Your choice stands.</p>`;
+  if (A.equipment === 'bw') return `<p class="flag"><b>Good start.</b> Bodyweight work still needs to get hard to keep helping. The plan uses single-leg moves and a loaded backpack so it can.</p>`;
+  return '';
+}
+function reviewRows(){
+  const exp = {new:'New to running', some:"I've trained before", regular:'I train regularly'}[A.experience];
+  const eq = {bw:'Bodyweight', db:'Dumbbells / kettlebells', bb:'Barbell / gym'}[A.equipment];
+  const when = A.timeline==='race' ? `Race ${A.raceDate} (${weeksBetween(A.startDate,A.raceDate)} wks)` : `${A.weeks} weeks`;
+  const bench = A.benchKind==='none' ? 'Skipped' : `${A.benchDist} ${fmtTime(A.benchTime)}${A.benchKind==='aspire'?' (aspirational)':''}`;
+  return [
+    ['Goal', A.distance, 0],
+    ['Experience', exp, 1],
+    ['Weekly volume', `${A.volume} ${A.units}`, 1],
+    ['Timeline', when, 2],
+    ['Start', A.startDate, 2],
+    ['Benchmark', bench, 3],
+    ['Goal time', fmtTime(A.goalTime), 3],
+    ['Run days', `${A.days} per week`, 4],
+    ['Long run / hard day', `${A.longDay} / ${A.qualityDay}`, 4],
+    ['Strength', +A.strength ? `${A.strength}× per week, ${eq}` : 'None', 5]
+  ];
+}
+
+// ---------- render + events ----------
+const $ = id => document.getElementById(id);
+function render(){
+  const s = SCREENS[idx];
+  $('step').textContent = `Step ${idx+1} of ${SCREENS.length}`;
+  $('progress').innerHTML = SCREENS.map((_,i) => `<i class="${i<=idx?'on':''}"></i>`).join('');
+  $('screen').innerHTML = `<h1>${s.title}</h1><p class="lead">${s.lead}</p>` + s.render();
+  $('err').textContent = '';
+  $('back').hidden = idx === 0;
+  $('next').textContent = idx === SCREENS.length-1 ? 'Build my plan' : 'Next';
+}
+function rerender(){ // keep scroll + focus-friendly redraw within a screen
+  const y = window.scrollY; render(); window.scrollTo(0, y);
+}
+
+$('screen').addEventListener('click', e => {
+  const c = e.target.closest('.choice');
+  if (c){
+    const name = c.dataset.name; let v = c.dataset.val;
+    if (['days','strength'].includes(name)) v = +v;
+    A[name] = v;
+    if (name==='strength' && v===0) A.equipment = null;
+    save(); rerender(); return;
+  }
+  const g = e.target.closest('[data-goto]');
+  if (g){ idx = +g.dataset.goto; render(); window.scrollTo(0,0); }
+});
+$('screen').addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.field){ A[t.dataset.field] = t.value; save(); }
+  if (t.dataset.time){ t.value = t.value.replace(/\D/g,''); A[t.dataset.time] = Object.assign({}, A[t.dataset.time], {[t.dataset.part]: t.value}); save(); }
+  $('err').textContent = '';
+});
+$('screen').addEventListener('change', e => {
+  // redraw for fields that change what the screen shows
+  if (['raceDate','startDate','benchDist'].includes(e.target.dataset.field)) rerender();
+});
+
+$('next').addEventListener('click', () => {
+  const msg = SCREENS[idx].check();
+  if (msg){ $('err').textContent = msg; return; }
+  if (idx < SCREENS.length-1){ idx++; render(); window.scrollTo(0,0); }
+  else { $('err').textContent = 'Answers saved. The plan builder is coming in the next update.'; }
+});
+$('back').addEventListener('click', () => { if (idx > 0){ idx--; render(); window.scrollTo(0,0); } });
+
+render();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register("bb-sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>

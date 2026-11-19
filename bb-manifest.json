@@ -1,13 +1,16 @@
 {
   "name": "Training Block Builder",
   "short_name": "Block Builder",
+  "description": "Build a run training plan, or upload your own, and keep it on your phone offline.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#E9ECE6",
-  "theme_color": "#1E2422",
+  "theme_color": "#E9ECE6",
   "icons": [
-    { "src": "bb-icon-180.png", "sizes": "180x180", "type": "image/png" },
-    { "src": "bb-icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "bb-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "bb-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "bb-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
   ]
 }

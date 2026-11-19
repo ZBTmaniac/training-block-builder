@@ -2061,11 +2061,14 @@ let ICU = icuLoad();
 function b64(bytes){ let s = ''; bytes.forEach(b => s += String.fromCharCode(b)); return btoa(s); }
 const ICU_TYPE = {Run:'Run', Bike:'Ride', Brick:'Ride', Swim:'Swim', Strength:'WeightTraining', Other:'Workout'};
 function icuEvents(weeks){
+  // Window starts today, or on the plan's first day if that's later
   const today = new Date(); today.setHours(0,0,0,0);
-  const end = addDays(today, weeks * 7);
+  const planStart = P.weeks[0].days[0].date;
+  const from = planStart > today ? planStart : today;
+  const end = addDays(from, weeks * 7);
   const evs = [];
   P.weeks.forEach((W, wi) => W.days.forEach(d => {
-    if (d.date < today || d.date >= end) return;
+    if (d.date < from || d.date >= end) return;
     dayItems(d).forEach((it, i) => {
       if (it.x && it.x.optional) return;
       const date = iso(d.date) + 'T00:00:00';
@@ -2101,7 +2104,7 @@ async function icuSend(){
   try {
     await icuCall('/events/bulk?upsert=true', 'POST', evs);
     ICU.sent = [...new Set([...(ICU.sent || []), ...evs.map(e => e.external_id)])]; icuSave(ICU);
-    status(`Sent ${evs.length} workouts. If Intervals.icu is linked to Garmin with "Upload planned workouts" on, the next week will reach your watch at the next sync.`);
+    status(`Sent ${evs.length} workouts (${iso(new Date(evs[0].start_date_local))} to ${iso(new Date(evs[evs.length - 1].start_date_local))}). If Intervals.icu is linked to Garmin with "Upload planned workouts" on, the next week will reach your watch at the next sync.`);
   } catch (e){
     status(e instanceof TypeError ? 'Couldn\'t reach Intervals.icu from this browser (offline, or the request was blocked). Use the watch files instead and drop them onto your Intervals.icu calendar.' : e.message);
   }
@@ -2121,7 +2124,8 @@ function icuCard(){
     <p class="sub">Puts your workouts on your Intervals.icu calendar. From there it can send them to your Garmin watch.</p>
     <label class="field">API key <input id="icukey" type="password" autocomplete="off" value="${esc(ICU.key || '')}" placeholder="Paste key"></label>
     <label class="field">Athlete ID <input id="icuath" value="${esc(ICU.athlete && ICU.athlete !== '0' ? ICU.athlete : '')}" placeholder="optional"></label>
-    <label class="field">Send <select id="icuweeks">${[[1,'Next week'],[2,'Next 2 weeks'],[4,'Next 4 weeks'],[52,'Whole plan']].map(([v, l]) => `<option value="${v}" ${(+ICU.weeks || 2) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="field">Send <select id="icuweeks">${[[1,'1 week'],[2,'2 weeks'],[4,'4 weeks'],[104,'Whole plan']].map(([v, l]) => `<option value="${v}" ${(+ICU.weeks || 2) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <p class="quiet" style="margin:4px 0 0">Counts from today, or from your plan's start date if that's later.</p>
     <div class="planbtns" style="margin-top:8px"><button id="icusend">Send workouts</button><button id="icudel">Remove sent</button></div>
     <p id="icustatus" class="quiet" style="margin:8px 0 0" role="status"></p>
     <details style="margin-top:8px"><summary class="quiet" style="cursor:pointer">Where do I find my key? Is it safe?</summary>

@@ -1,5 +1,5 @@
 // Bump this version whenever you upload a new index.html
-const CACHE = 'block-builder-v12';
+const CACHE = 'block-builder-v13';
 const FILES = ['./', './index.html', './bb-manifest.json', './bb-icon-180.png', './bb-icon-192.png', './bb-icon-512.png', './apple-touch-icon.png', './favicon.ico'];
 
 self.addEventListener('install', e => {

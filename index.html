@@ -173,7 +173,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.7.3';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.8.0';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -185,7 +185,7 @@ const DEFAULTS = {
   expert:false, ackTough:false,
   lthr:'', lthrSource:'test', effort:'pace',
   mode:'gen', custom:null,
-  heat:'', heatVsTraining:''
+  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false
 };
 let A = load();
 let idx = 0;
@@ -254,9 +254,16 @@ const SCREENS = [
       <p class="sub">Your average over the last 4 weeks. 0 is fine.</p>
       <label class="field">Per week <input type="number" inputmode="decimal" min="0" data-field="volume" value="${esc(A.volume)}" placeholder="e.g. 15"></label>
       <div style="margin-top:10px">${choices('units', [{v:'mi',label:'Miles'},{v:'km',label:'Kilometers'}], 'two')}</div>
-      </div>`,
+      </div>
+      ${askCanRun() ? `<div class="card"><h3>How long can you run right now without stopping?</h3>
+        <p class="sub">At an easy pace, without walk breaks. Your best guess is fine.</p>
+        ${choices('canRun', [{v:'none', label:'Not yet'}, {v:'lt5', label:'Under 5 minutes'}, {v:'5to15', label:'5–15 minutes'}, {v:'15to25', label:'15–25 minutes'}, {v:'30', label:'30 minutes or more'}])}
+        <details style="margin-top:10px"><summary class="quiet" style="cursor:pointer">Not sure? An optional quick check</summary>
+          <p class="quiet" style="margin:8px 0 0">Walk briskly for 5 minutes to warm up. Then run at a pace where you could still talk, and stop when you need to walk. The time on your watch is your answer. No need to push: this is about where to start, not a test you can fail.</p></details>
+      </div>` : ''}`,
     check: () => {
       if (!A.experience) return 'Pick your experience level.';
+      if (askCanRun() && !A.canRun) return 'Pick how long you can run without stopping.';
       if (A.volume === '' || isNaN(+A.volume) || +A.volume < 0) return 'Enter your recent weekly volume (0 is fine).';
       if (!A.expert && +A.volume > (A.units==='mi'?150:240)) return 'That volume looks too high. Check the units.';
       return '';
@@ -467,6 +474,7 @@ $('screen').addEventListener('click', e => {
   if (uploadMode){ uploadClick(e); return; }
   if (e.target.closest('[data-upload]')){ showUpload(); return; }
   if (ackMode){ ackClick(e); return; }
+  if (glossMode) return;
   const c = e.target.closest('.choice');
   if (c){
     const name = c.dataset.name; let v = c.dataset.val;
@@ -495,6 +503,7 @@ $('screen').addEventListener('change', e => {
 
 $('next').addEventListener('click', () => {
   if (uploadMode){ importUpload(); return; }
+  if (glossMode){ A.glossaryOk = true; glossMode = false; save(); if (needsAck()){ showAck(); return; } A.built = true; save(); showPlan(); return; }
   const msg = SCREENS[idx].check();
   if (msg){ $('err').textContent = msg; return; }
   if (idx < SCREENS.length-1){ idx++; render(); window.scrollTo(0,0); }
@@ -504,21 +513,34 @@ $('next').addEventListener('click', () => {
       A.ackTough = true; ackMode = false; $('next').disabled = false; A.built = true; save(); showPlan(); return;
     }
     for (let i = 0; i < SCREENS.length; i++){ const m = SCREENS[i].check(); if (m){ idx = i; render(); $('err').textContent = m; return; } }
+    if (needsGlossary()){ showGlossary(); return; }
     if (needsAck()){ showAck(); return; }
     A.built = true; save(); showPlan();
   }
 });
 $('back').addEventListener('click', () => {
   if (uploadMode){ uploadMode = false; $('next').disabled = false; idx = 0; render(); window.scrollTo(0,0); return; }
+  if (glossMode){ glossMode = false; render(); window.scrollTo(0,0); return; }
   if (ackMode){ ackMode = false; $('next').disabled = false; render(); window.scrollTo(0,0); return; }
   if (idx > 0){ idx--; render(); window.scrollTo(0,0); }
 });
 
 // ---------- "know what you're signing up for" (marathon, slower or short timeline) ----------
-let ackMode = false;
+let ackMode = false, glossMode = false;
+function needsGlossary(){ return !A.glossaryOk && needsRunWalk() && !buildPlanAll().notes.rwOnly; }
+function showGlossary(){
+  glossMode = true;
+  const rw = buildPlanAll().notes.rwThen;
+  $('step').textContent = 'Before you start';
+  $('screen').innerHTML = `<h1>A few running words</h1>
+    <p class="lead">Your first ${rw ? rw.rwWeeks : 'few'} weeks are run-walk and need none of this. After that, your plan uses these terms, so here's what they mean. You can find this again in your plan anytime.</p>
+    <div class="card">${glossaryHTML()}</div>`;
+  $('err').textContent = ''; $('back').hidden = false; $('next').textContent = "I've read it, build my plan";
+  window.scrollTo(0, 0);
+}
 function toughNotes(){
   if (A.expert || A.distance !== 'Full') return null;
-  const t = buildPlan().notes;
+  const t = buildPlanAll().notes;
   return (t.timeLimited || t.outkick || t.compressed) ? t : null;
 }
 function needsAck(){ return !A.ackTough && !!toughNotes(); }
@@ -577,12 +599,13 @@ const LR_PEAK = {
   'Half':{new:10, some:12, regular:13}, 'Full':{new:16, some:18, regular:20}
 };
 const DIST_MI = {'1 mile':1, '5K':3.107, '10K':6.214, 'Half':13.109, 'Full':26.219};
-const PHASE_NAME = {base:'Base', build:'Build', peak:'Peak', taper:'Taper', custom:''};
+const PHASE_NAME = {base:'Base', build:'Build', peak:'Peak', taper:'Taper', custom:'', runwalk:'Getting started'};
 const PHASE_NOTE = {
   base:'Building the engine. Mostly easy running, with short fast strides and hills to stay sharp.',
   build:'Quality work ramps up. Hard days are hard, easy days stay truly easy.',
   peak:'Race-specific work. The biggest weeks of the plan.',
-  taper:'Less volume, same sharpness. Trust the training.'
+  taper:'Less volume, same sharpness. Trust the training.',
+  runwalk:'Building up to 30 minutes of running. If a week felt hard, repeat it. That\'s normal, and it\'s how this is meant to work.'
 };
 
 function volMi(){ const v = +A.volume || 0; return A.units === 'km' ? v / KM : v; }
@@ -702,7 +725,19 @@ function hrText(key){
   const r = HR_PCT[k]; if (!r) return '';
   return r[0] === 0 ? `under ${Math.round(l * r[1])} bpm` : `${Math.round(l * r[0])}–${Math.round(l * r[1])} bpm`;
 }
+const PLAIN_LABEL = {E:'an easy, chatty pace', steady:'a steady, comfortable effort', MP:'marathon effort', HM:'half-marathon effort', T:'a comfortably hard effort', '10K':'a hard but controlled effort', '5K':'a hard effort', R:'a fast effort', race:'your race effort'};
+const isNew = () => A.experience === 'new' && A.mode !== 'upload';
+// Easy-pace phrasing without "easy at easy": "(9:30/mi, RPE 2–3)", or plain words for new runners
+function eff(key){
+  if (isNew() && key === 'E') return '— slow enough to talk in full sentences. Walk breaks are fine.';
+  const a = at(key); return a.replace(/^at [^(]*\(/, '(');
+}
 function at(key){
+  if (isNew()){
+    const rpe0 = key === 'race' ? {'5K':'8–9', '10K':'8', 'Half':'6–7', 'Full':'5–6'}[A.distance] : ZONE_RPE[key];
+    const pace0 = Z && Z[key] ? `, about ${fmtPace(Z[key])}` : '';
+    return `at ${PLAIN_LABEL[key]} (effort ${rpe0} out of 10${pace0})`;
+  }
   const rpe = key === 'race' ? {'5K':'8–9', '10K':'8', 'Half':'6–7', 'Full':'5–6'}[A.distance] : ZONE_RPE[key];
   const label = key === 'race' && Z && Z.raceProj ? 'projected race pace' : ZONE_LABEL[key];
   const useHR = lthrVal() && (A.effort === 'hr' || !Z);
@@ -723,15 +758,15 @@ function workoutSteps(d, phase, f, k, pace){
   const long = d.miles * pace > 75;
   const fuel = 'Practice fueling: carbs every 30–45 min';
   switch (d.kind){
-    case 'E': return ['Easy the whole way ' + at('E')].concat(d.strides ? ['Finish with 6 × 20 s strides: quick and relaxed, full recovery between'] : []);
+    case 'E': return ['Easy the whole way ' + eff('E')].concat(d.strides ? ['Finish with 6 × 20 s strides: quick and relaxed, full recovery between'] : []);
     case 'R': return ['Slower than easy. Skip it if you feel beat up.'];
-    case 'MLR': return ['Easy the whole way ' + at('E')].concat(long ? [fuel] : []);
+    case 'MLR': return ['Easy the whole way ' + eff('E')].concat(long ? [fuel] : []);
     case 'SH': return ['15–20 min very easy', '4 × 20 s strides'];
     case 'TT': return [WU, `Run ${D === 'Full' ? 'a hard 10K' : D === 'Half' ? 'a hard 10K' : 'your ' + D} as a time trial, or at goal effort`, 'Cool down: 10 min easy'];
     case 'RACE': return ['Start a touch slower than goal pace for the first mile', 'Settle in ' + at('race')].concat(D === 'Full' || D === 'Half' ? ['Fuel the way you practiced: carbs every 30–45 min'] : ['Hold back for the first half, then race the second']);
     case 'Q': {
       if (phase === 'base'){
-        if (lvl === 'new') return ['Easy ' + at('E'), 'Finish with 4–6 × 20 s strides'];
+        if (lvl === 'new') return ['Easy ' + eff('E'), 'Finish with 4–6 × 20 s strides'];
         return k % 2 ? [WU, `${n(6, 10)} × 30 s hill sprints, hard but controlled; walk down to recover`, CD]
                      : [WU, `Fartlek: ${n(6, 10)} × 1 min ${at('10K')}, 1 min easy between`, CD];
       }
@@ -745,30 +780,30 @@ function workoutSteps(d, phase, f, k, pace){
       return [WU, lvl === 'regular' ? `${fit(m(4, 6), 1)} × 1600 m ${at('10K')}, 2–3 min jog` : `${fit(m(6, 8), 0.5)} × 800 m ${at('10K')}, 400 m jog`, CD];
     }
     case 'T': {
-      if (phase === 'taper') return ['Easy ' + at('E'), 'Finish with 4–6 × 20 s strides'];
+      if (phase === 'taper') return ['Easy ' + eff('E'), 'Finish with 4–6 × 20 s strides'];
       if (phase === 'base'){
-        if (lvl === 'new') return ['Easy the whole way ' + at('E')];
-        return ['Easy for the first half ' + at('E'), `Then ${n(15, 25)} min ${at('steady')}`, 'Easy to finish'];
+        if (lvl === 'new') return ['Easy the whole way ' + eff('E')];
+        return ['Easy for the first half ' + eff('E'), `Then ${n(15, 25)} min ${at('steady')}`, 'Easy to finish'];
       }
       if (phase === 'peak'){
         if (short) return [WU, lvl === 'new' ? `${n(2, 3)} × 5 min ${at('T')}, 2 min easy jog` : `Cruise intervals: ${fit(n(4, 5), 1)} × 1600 m ${at('T')}, 1 min rest`, CD];
         if (D === 'Half') return [WU, lvl === 'new' ? `2 × ${fmtDist(1.5)} ${at('race')}, 3 min easy` : `${fit(n(2, 3), 2.5)} × ${fmtDist(2)} ${at('race')}, 800 m float at steady pace`, CD];
-        return ['Easy ' + at('E'), `Last ${n(15, 20)} min ${at('steady')}`, 'Kept light on purpose: the long run carries goal-pace work this phase'];
+        return ['Easy ' + eff('E'), `Last ${n(15, 20)} min ${at('steady')}`, 'Kept light on purpose: the long run carries goal-pace work this phase'];
       }
       if (lvl === 'new') return [WU, `${n(2, 3)} × 5 min ${at('T')}, 2 min easy jog`, CD];
       if (lvl === 'some') return [WU, `Float set: ${fitMin(n(3, 4), 8)} × 6 min ${at('T')}, 2 min float at steady pace (keep moving, no full stops)`, CD];
       return [WU, `Float set: ${fitMin(n(3, 5), 10)} × 8 min ${at('T')}, 2 min float at steady pace (keep moving, no full stops)`, CD];
     }
     case 'L': {
-      if (phase === 'taper') return ['Easy and relaxed ' + at('E'), 'Shorter on purpose. Arrive at the start line fresh.'];
-      const base = ['Easy the whole way ' + at('E'), 'Even effort beats even pace on hills'];
+      if (phase === 'taper') return ['Easy and relaxed ' + eff('E'), 'Shorter on purpose. Arrive at the start line fresh.'];
+      const base = ['Easy the whole way ' + eff('E'), 'Even effort beats even pace on hills'];
       const rehearse = 'Dress rehearsal: race-morning breakfast, race kit and shoes, race-day fueling';
       if (phase !== 'peak') return base.concat(long ? [fuel] : []);
       if (D === 'Full'){
         const mp = lvl === 'new' ? `Last ${fmtDist(3)} ${at('race')}` : lvl === 'some' ? `2 × ${fmtDist(3)} ${at('race')}, ${fmtDist(1)} easy between` : `Middle ${fmtDist(n(8, 12))} ${at('race')}`;
-        return (d.rehearsal ? [rehearse] : []).concat(['Easy ' + at('E') + ' to start', mp, 'Easy to finish', fuel]);
+        return (d.rehearsal ? [rehearse] : []).concat(['Easy ' + eff('E') + ' to start', mp, 'Easy to finish', fuel]);
       }
-      if (D === 'Half' && lvl !== 'new') return (d.rehearsal ? [rehearse] : []).concat(['Easy ' + at('E'), `Last ${fmtDist(n(2, 3))} ${at('race')}`]).concat(long ? [fuel] : []);
+      if (D === 'Half' && lvl !== 'new') return (d.rehearsal ? [rehearse] : []).concat(['Easy ' + eff('E'), `Last ${fmtDist(n(2, 3))} ${at('race')}`]).concat(long ? [fuel] : []);
       return (d.rehearsal && !short ? [rehearse] : []).concat(base).concat(long ? [fuel] : []);
     }
   }
@@ -942,11 +977,13 @@ function liftSteps(t, phase, f, cut){
   const line = ([name, pre, swap]) => `${name.replace('{acc}', acc)}: ${pre.replace('{rx}', rx).replace('{acc}', acc)}${swap ? ` · Swap: ${swap}` : ''}`;
   const out = [];
   if (cut) out.push('Cutback week: lighter on purpose. Sets are already reduced; keep effort around RPE 6–7 and drop a set from any jumps.');
+  if (t.includes('beginner')) return ['Start light: pick a weight you could lift 4–5 more times. Learning the movements is the goal for now.'].concat(L.moderate.map(line));
   if (t.includes('maintenance')){
     out.push(line(L.maint), line(L.heavy[0]), line(L.heavy[2]), 'Skip the jumps in the last 10 days before your race');
     return out;
   }
   if (t.includes('heavy')){
+    if (A.experience === 'new' && phase === 'base') out.push('New to lifting? Keep effort around 6 out of 10 for the first few weeks and focus on clean reps before adding weight.');
     out.push(line(L.main), ...L.heavy.map(line));
     if (!cut) out.push(`Progress: when every set of the main lift feels easier than its target RPE, ${L.load}.`);
     return out;
@@ -1162,6 +1199,7 @@ function buildPlan(){
     W.days.forEach(d => {
       d.steps = workoutSteps(d, W.phase, f, k, pace);
       d.struct = workoutStruct(d, W.phase, f, k, pace);
+      if (isNew()){ d.steps = d.steps.map(plainStep); d.title = PLAIN_TITLE[d.title] || d.title; }
       if (isHotRace() && raceDate){
         const toRace = Math.round((raceDate - d.date) / 864e5);
         if (toRace >= 8 && toRace <= 21 && ['E','R','MLR'].includes(d.kind))
@@ -1180,7 +1218,7 @@ function buildPlan(){
 // ---------- plan view ----------
 let P = null, wk = 0;
 function showPlan(){
-  P = A.mode === 'upload' && A.custom ? buildCustomPlan() : buildPlan();
+  P = A.mode === 'upload' && A.custom ? buildCustomPlan() : buildPlanAll();
   $('quiz').hidden = true; $('quizbar').hidden = true; $('plan').hidden = false;
   const today = new Date(); today.setHours(0,0,0,0);
   const off = Math.floor((today - parseDate(A.startDate)) / (7 * 864e5));
@@ -1205,7 +1243,11 @@ function noteList(){
     return out;
   }
   if (A.expert) return ['Expert mode is on: volume, distance and time safety checks are off.', 'Not medical advice. Listen to your body and adjust.'];
-  if (+A.days === 3) out.push('On 3 run days, the long run is a big share of your week. A 4th short, easy run would make the plan easier on your body.');
+  if (N.rwOnly) out.push(`This plan gets you running: run-walk sessions three times a week that build ${N.rwDone ? 'to 30 minutes of running without stopping' : 'as far as your timeline allows, faster than ideal'}. ${A.timeline === 'race' ? 'You can absolutely race with walk breaks, and lots of people do.' : ''}`);
+  if (N.rwThen) out.push(`Weeks 1–${N.rwThen.rwWeeks} get you running 30 minutes without stopping. From week ${N.rwThen.regWeek} it becomes a regular ${A.distance} plan, so read Running words before then.`);
+  if (needsRunWalk()) out.push('Run-walk weeks have three runs with a rest day between each. Your other days are rest or an optional walk while your legs adapt.');
+  if (needsRunWalk() && +A.strength) out.push('Strength starts with one light session a week for the first month.');
+  if (+A.days === 3 && !N.rwOnly) out.push('On 3 run days, the long run is a big share of your week. A 4th short, easy run would make the plan easier on your body.');
   if (N.floor) out.push(`Week 1 starts at about ${fmtDist(N.floor)}, a bit above your recent volume, because this plan needs a minimum base.`);
   if (N.outkick) out.push(`Your timeline can't safely reach this plan's usual peak of ${fmtDist(N.outkick.target)}. It tops out near ${fmtDist(N.outkick.peak)}. A later race or shorter distance would help, or treat this as a finish-focused plan.`);
   else if (N.compressed) out.push('Short timeline: volume steps up every 2 weeks with no cutback weeks. Back off if you feel run down.');
@@ -1262,20 +1304,23 @@ function drawPlan(){
           : `<div class="item"><p>${esc(d.hint || HINT.off)}</p></div>`}
       </div></details>`;
   }).join('');
-  const overview = P.weeks.map((w, i) => `<tr class="${i === wk ? 'cur' : ''}"><td><button data-week="${i}">Week ${i+1}</button></td><td>${PHASE_NAME[w.phase] || ''}</td><td>${fmtDist(w.total)}${P.custom ? ' run' : ''}</td></tr>`).join('');
+  const overview = P.weeks.map((w, i) => `<tr class="${i === wk ? 'cur' : ''}"><td><button data-week="${i}">Week ${i+1}</button></td><td>${PHASE_NAME[w.phase] || ''}</td><td>${w.sumText || fmtDist(w.total) + (P.custom ? ' run' : '')}</td></tr>`).join('');
   const sportsUsed = P.custom ? [...new Set(A.custom.sessions.map(x => SPORT_CLS[x.sport]).filter(c => ['run','bike','swim','lift','other'].includes(c)))] : null;
   $('plan').innerHTML = `
     <p class="phase">${P.custom ? esc(planName()) : `${PHASE_NAME[W.phase]} phase · ${esc(A.distance)} plan`}</p>
     <div class="weekrow"><div>
       <p class="weekno">Week ${wk + 1}<small> / ${P.N}</small></p>
-      <p class="dates">${fmt(first)} – ${fmt(last)}${W.total ? ' · ' + fmtDist(W.total) + (P.custom ? ' run' : '') : ''}</p></div>
+      <p class="dates">${fmt(first)} – ${fmt(last)}${W.sumText ? ' · ' + W.sumText : W.total ? ' · ' + fmtDist(W.total) + (P.custom ? ' run' : '') : ''}</p></div>
       <div class="nav"><button id="pprev" aria-label="Previous week" ${wk === 0 ? 'disabled' : ''}>‹</button>
       <button id="pnext" aria-label="Next week" ${wk === P.N - 1 ? 'disabled' : ''}>›</button></div></div>
     ${PHASE_NOTE[W.phase] ? `<p class="weeknote">${PHASE_NOTE[W.phase]}</p>` : ''}
+    ${W.phase === 'runwalk' && W.rwLevel !== undefined ? `<div class="planbtns" style="margin-top:8px"><button id="rwrepeat">This week felt hard: repeat it</button></div>` : ''}
+    ${P.notes && P.notes.rwThen && wk >= P.notes.rwThen.rwWeeks - 1 && wk <= P.notes.rwThen.rwWeeks ? `<p class="flag"><b>${wk < P.notes.rwThen.rwWeeks ? 'Next week' : 'This week'} you start regular running workouts.</b> Read <a href="#gloss">Running words</a> below first so the workouts make sense.</p>` : ''}
     <div class="strip">${strip}</div>
     <div class="legend">${sportsUsed ? sportsUsed.map(c => `<span class="l-${c}">${({run:'Run', bike:'Bike', swim:'Swim', lift:'Strength', other:'Cross-train'})[c]}</span>`).join('') : `<span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}`}</div>
     ${cards}
     ${goalCard()}
+    <details class="card notes" id="gloss" style="margin-top:16px"><summary>Running words: what the workouts mean</summary>${glossaryHTML()}</details>
     <details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
       <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul>
       ${!P.custom && (P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}</details>
@@ -1293,6 +1338,7 @@ function drawPlan(){
   $('pprev').onclick = () => { if (wk > 0){ wk--; drawPlan(); } };
   $('pnext').onclick = () => { if (wk < P.N - 1){ wk++; drawPlan(); } };
   if ($('editans')) $('editans').onclick = () => showQuiz();
+  if ($('rwrepeat')) $('rwrepeat').onclick = () => { A.rwRepeats = [...new Set([...(A.rwRepeats || []), wk])]; save(); P = buildPlanAll(); drawPlan(); };
   if ($('toupload')) $('toupload').onclick = () => showQuiz('upload');
   if ($('reupload')) $('reupload').onclick = () => showQuiz('upload');
   if ($('makegen')) $('makegen').onclick = () => showQuiz('gen');
@@ -1321,6 +1367,18 @@ function goalCard(){
     <p style="margin:0 0 6px;font-size:15px">Projected race-day range: <b>${fmtSecs(g.fast)}–${fmtSecs(g.slow)}</b>. Your goal: <b>${fmtSecs(g.goal)}</b>.</p>
     <p style="margin:0;font-size:15px">${msg}</p>${caveat ? `<p class="quiet" style="margin:8px 0 0">${caveat}</p>` : ''}</div>`;
 }
+// Plain-language rewrites for new runners
+const PLAIN = [
+  [/Finish with (\d+–?\d*) × 20 s strides[^]*$/, 'Finish with $1 short pickups: run quick but relaxed for 20 seconds, then walk until you\'re ready for the next'],
+  [/^Warm up: 10–15 min easy, then 4 strides$/, 'Warm up: 10–15 minutes of easy running'],
+  [/^Cool down: easy running to finish the day's distance$/, 'Cool down: easy running or walking to finish the day'],
+  [/^Fartlek: (\d+) × 1–2 min comfortably hard \(RPE 7\), 2 min easy between$/, 'Speed play: $1 times, run 1–2 minutes at a comfortably hard effort (7 out of 10), then 2 minutes easy'],
+  [/\(RPE (\d+(?:–\d+)?)\)/g, '(effort $1 out of 10)'],
+  [/, RPE (\d+(?:–\d+)?)\)/g, ', effort $1 out of 10)']
+];
+const PLAIN_TITLE = {'Easy + strides':'Easy run + pickups', 'Fartlek':'Speed play (fartlek)', 'Tempo (short)':'Tempo: comfortably hard', 'Hills or fartlek':'Hills or speed play'};
+function plainStep(t){ return PLAIN.reduce((x, [re, to]) => x.replace(re, to), t); }
+
 const RULES_URL = 'https://github.com/ZBTmaniac/training-block-builder/blob/main/RULES.md';
 const GOAL_LABEL = {on:'On track', amb:'Ambitious', big:'Big stretch'};
 function goalConfNote(g){
@@ -1338,9 +1396,31 @@ function goalLive(){
     ${g.longPlan ? `<br><span class="quiet">${goalConfNote(g)}</span>` : ''}
     <br><a href="${RULES_URL}#paces-and-heart-rate" target="_blank" rel="noopener" class="quiet">How this is calculated</a></p>`;
 }
+const GLOSSARY = [
+  ['Easy pace', 'Slow enough to talk in full sentences. Most of your running is easy, and it should feel almost too slow. That\'s where most of your fitness comes from.'],
+  ['Effort (RPE)', 'How hard something feels, from 1 to 10. Workouts use it so you can train by feel instead of chasing a number.'],
+  ['Strides (pickups)', 'Short bursts of about 20 seconds: quick and relaxed, not a sprint. Walk or jog until you\'re fully recovered between them. They make running feel smoother.'],
+  ['Warm-up and cool-down', 'Easy running or brisk walking before and after a harder workout. They\'re part of the session, not extras.'],
+  ['Tempo / threshold', 'Comfortably hard: you could say a few words but not hold a conversation. About 7 out of 10.'],
+  ['Intervals / reps', 'Short, hard efforts (like 800 m or 1 km) with easy jogging or walking between. "6 × 800 m" means do it six times.'],
+  ['Float', 'A recovery that keeps you moving at a steady pace instead of stopping, between harder efforts.'],
+  ['Fartlek (speed play)', 'Unstructured speed: run faster for a minute or two, then easy, and repeat. Good for learning how pace feels.'],
+  ['Long run', 'Your longest run of the week, at easy pace. It\'s hard because of the time on your feet, not the speed.'],
+  ['Recovery run', 'Even slower than easy. It loosens your legs after a hard day. Skip it if you feel beat up.'],
+  ['Cutback week', 'A lighter week every few weeks so your body can absorb the training.'],
+  ['Taper', 'The last week or few before a race, with less running so you start fresh.'],
+  ['Run-walk', 'Running and walking in planned intervals. It\'s a smart way to build up, and a legit way to race.']
+];
+const RPE_SCALE = [['1–2', 'Very easy. Walking, or the gentlest jog.'], ['3–4', 'Easy. You can talk in full sentences.'], ['5–6', 'Steady. You can talk, in shorter sentences.'], ['7', 'Comfortably hard. A few words at a time.'], ['8', 'Hard. You can hold it, but you want it to end.'], ['9', 'Very hard. Only a minute or two.'], ['10', 'All-out.']];
+function glossaryHTML(){
+  return `<dl style="margin:10px 0 0;font-size:15px">${GLOSSARY.map(([t, d]) => `<dt style="font-weight:600;margin-top:10px">${esc(t)}</dt><dd style="margin:2px 0 0">${esc(d)}</dd>`).join('')}</dl>
+    <h3 style="margin:16px 0 6px;font-size:16px">The effort scale</h3>
+    <table class="overview">${RPE_SCALE.map(([n, d]) => `<tr><td style="width:56px"><b>${n}</b></td><td style="text-align:left">${esc(d)}</td></tr>`).join('')}</table>`;
+}
 function liftHint(t){
   const eq = {bw:'Bodyweight', db:'Dumbbells/kettlebells', bb:'Barbell'}[A.equipment] || '';
   if (t.includes('heavy')) return `${eq}. After your run, ideally 6+ hours later. The first lift is the heavy one; the rest support it.`;
+  if (t.includes('beginner')) return `${eq}. A light session after your run to learn the movements. One a week is plenty to start.`;
   if (t.includes('power')) return `${eq}. Fast, springy work for running power. Fresh legs matter more than fatigue here.`;
   if (t.includes('maintenance')) return `${eq}. One short session to hold your strength without adding fatigue.`;
   return `${eq}. Moderate effort, finish feeling like you had more in the tank.`;
@@ -1952,7 +2032,10 @@ function buildCustomPlan(){
 function dayItems(d){
   if (d.items) return d.items;
   const out = [];
-  if (d.role !== 'off' || d.miles) out.push({cls:'run', sport:'Run', title: d.title, sub: d.miles ? fmtDist(d.miles) : '', hint: d.hint, steps: d.steps});
+  const mins = d.miles && P && P.pace ? Math.round(d.miles * P.pace / 5) * 5 : 0;
+  const sub = d.sub !== undefined ? d.sub : d.miles ? (isNew() && mins ? `about ${mins} min · ${fmtDist(d.miles)}` : fmtDist(d.miles)) : '';
+  if (d.role !== 'off' || d.miles) out.push({cls:'run', sport:'Run', title: d.title, sub, hint: d.hint, steps: d.steps});
+  else if (d.title === 'Optional walk') out.push({cls:'other', sport:'Other', title: d.title, sub, hint: d.hint, steps: d.steps, optional: true});
   if (d.lift) out.push({cls:'lift', sport:'Strength', title: d.lift, sub:'', hint: liftHint(d.lift), steps: d.liftSteps});
   return out;
 }
@@ -2092,7 +2175,7 @@ function icuEvents(weeks){
   P.weeks.forEach((W, wi) => W.days.forEach(d => {
     if (d.date < from || d.date >= end) return;
     dayItems(d).forEach((it, i) => {
-      if (it.x && it.x.optional) return;
+      if ((it.x && it.x.optional) || it.optional) return;
       const date = iso(d.date) + 'T00:00:00';
       const ev = {category: 'WORKOUT', start_date_local: date, type: ICU_TYPE[it.sport] || 'Run', name: it.title.slice(0, 80),
         description: (it.steps || []).join('\n'), external_id: `tbb-${iso(d.date)}-${i}`};
@@ -2154,6 +2237,109 @@ function icuCard(){
       <p class="quiet" style="margin:8px 0 0">On intervals.icu, open Settings and scroll to Developer Settings to create an API key. Your athlete ID is shown there too; leave it blank to use your own account.</p>
       <p class="quiet" style="margin:8px 0 0">The key is saved only on this device and sent only to intervals.icu. It gives full access to your Intervals.icu account, so don't use this on a shared device. To send workouts to Garmin, turn on "Upload planned workouts" in Intervals.icu's Garmin settings.</p>
       <p class="quiet" style="margin:8px 0 0">Sending again updates the same workouts instead of duplicating them. "Remove sent" deletes only the workouts this app added.</p></details></div>`;
+}
+
+
+// =====================================================================
+// GETTING STARTED: run-walk phase for new runners below the plan's base
+// =====================================================================
+function askCanRun(){
+  if (A.expert || !A.distance || !A.experience) return false;
+  return A.experience === 'new' || (A.volume !== '' && volMi() < FLOOR[A.distance]);
+}
+function needsRunWalk(){ return askCanRun() && ['none', 'lt5', '5to15', '15to25'].includes(A.canRun); }
+// Levels: [run seconds, walk seconds, repeats]; 0 walk = continuous. Each level is about a week, 3 sessions.
+const RW_LEVELS = [
+  [60, 90, 8], [90, 120, 6], [120, 90, 6], [180, 90, 5], [300, 120, 4],
+  [480, 120, 3], [600, 120, 3], [900, 120, 2], [1500, 0, 1], [1800, 0, 1]
+];
+const RW_START = {none: 0, lt5: 0, '5to15': 3, '15to25': 5};
+function rwSessionText(L, plain){
+  const [run, walk, reps] = L, fmt = x => x % 60 ? `${Math.floor(x / 60) ? Math.floor(x / 60) + ' min ' : ''}${x % 60} s`.trim() : `${x / 60} min`;
+  if (!walk) return [`Walk briskly for 5 minutes to warm up`, `Run ${fmt(run)} without stopping, slow enough to talk in full sentences`, `Walk 5 minutes to cool down`];
+  return [`Walk briskly for 5 minutes to warm up`, `Run ${fmt(run)}, then walk ${fmt(walk)}. Do that ${reps} times`, `Run slowly enough that you could talk in full sentences. The walks are part of the plan, not a failure.`, `Walk 5 minutes to cool down`];
+}
+function rwMinutes(L){ return Math.round((L[0] + L[1]) * L[2] / 60 - L[1] / 60 * (L[1] ? 1 : 0) + 10); }
+// Build the run-walk weeks; returns {weeks, endIdx, done} where done = reached 30 min continuous
+function buildRunWalk(N, raceDate, pad){
+  const start = parseDate(A.startDate);
+  let seq = [];
+  for (let i = RW_START[A.canRun] ?? 0; i < RW_LEVELS.length; i++){
+    seq.push(i);
+    let guard = 0;
+    while ((A.rwRepeats || []).includes(seq.length - 1) && guard++ < 4) seq.push(i);   // "repeat this week" taps
+  }
+  // Race-date plans short on weeks: keep the first and last level, skip evenly in between
+  const maxWeeks = N - 1;                                         // leave the last week for the race or finish run
+  while (seq.length > Math.max(1, maxWeeks) && seq.length > 2){ seq.splice(Math.floor(seq.length / 2), 1); }
+  while (pad && seq.length < maxWeeks) seq.push(seq[seq.length - 1]);   // extra weeks: hold 30 minutes, three times a week
+  const L = DAYS.indexOf(A.longDay);
+  const runDays = [L, (L + 5) % 7, (L + 3) % 7];                 // e.g. Sat, Thu, Tue: a rest day between each
+  const walkDay = +A.days >= 4 ? (L + 1) % 7 : -1;
+  const weeks = seq.map((lv, w) => {
+    const Lv = RW_LEVELS[lv];
+    const days = [];
+    for (let j = 0; j < 7; j++){
+      const date = addDays(start, w * 7 + j), wd = (date.getDay() + 6) % 7;
+      if (runDays.includes(wd)){
+        const mins = rwMinutes(Lv);
+        days.push({date, role: 'E', kind: 'RW', title: Lv[1] ? `Run-walk: ${Lv[0] >= 60 ? Lv[0] / 60 + ' min' : Lv[0] + ' s'} run, ${Lv[1] >= 60 ? Lv[1] / 60 + ' min' : Lv[1] + ' s'} walk` : `Run ${Lv[0] / 60} minutes`,
+          miles: 0, load: mins / 9, sub: `about ${mins} min`, hint: 'Getting started: build up to 30 minutes of running.', steps: rwSessionText(Lv),
+          struct: [{kind:'warmup', dur:{s:300}, zone:null, name:'Brisk walk'}, Lv[1] ? {repeat: Lv[2], steps: [{kind:'active', dur:{s:Lv[0]}, zone:null, name:'Run easy'}, {kind:'recovery', dur:{s:Lv[1]}, zone:null, name:'Walk'}]} : {kind:'active', dur:{s:Lv[0]}, zone:null, name:'Run easy'}, {kind:'cooldown', dur:{s:300}, zone:null, name:'Walk'}],
+          lift: null, rwLevel: lv});
+      } else if (wd === walkDay){
+        days.push({date, role: 'off', kind: 'off', title: 'Optional walk', miles: 0, load: 2, sub: '20–30 min', hint: 'An easy walk keeps you moving without the pounding of a 4th run day. New runners do best with a rest day between runs while bones and tendons catch up.', steps: ['Easy walk, 20–30 minutes. Skip it if you feel tired.'], lift: null});
+      } else days.push({date, role: 'off', kind: 'off', title: 'Rest', miles: 0, hint: HINT.off, steps: [], lift: null});
+    }
+    // Strength: 1 session for the first 4 weeks, then what they asked for (max 2), on run days after the run
+    const sN = Math.min(+A.strength || 0, w < 4 ? 1 : 2);
+    days.filter(d => d.kind === 'RW').slice(0, sN).forEach((d, i) => { d.lift = i === 0 ? 'Strength: beginner day' : 'Strength: moderate day'; d.liftSteps = liftSteps(d.lift, 'base', w / 8, false); });
+    const mins = days.filter(d => d.kind === 'RW').reduce((t, d) => t + rwMinutes(RW_LEVELS[d.rwLevel]), 0);
+    return {phase: 'runwalk', days, total: 0, sumText: `${mins} min of run-walk`, rwLevel: lv};
+  });
+  return {weeks, done: seq[seq.length - 1] === RW_LEVELS.length - 1};
+}
+// Full plan: run-walk first if needed, then the regular plan for the weeks left
+function buildPlanAll(){
+  if (!needsRunWalk()) return buildPlan();
+  Z = paceZones();
+  const N = planWeeks();
+  const raceDate = A.timeline === 'race' ? parseDate(A.raceDate) : null;
+  const rest = 0;
+  let rw = buildRunWalk(N, raceDate);
+  const left = N - rw.weeks.length;
+  const minRegular = {'5K': 4, '10K': 5, 'Half': 7, 'Full': 10}[A.distance];
+  if (left < minRegular){
+    // Run-walk all the way: finish week becomes race (or a 30-minute run)
+    const all = buildRunWalk(N, raceDate, true);
+    const weeks = all.weeks;
+    const lastDate = addDays(parseDate(A.startDate), weeks.length * 7);
+    if (raceDate || weeks.length < N){
+      const days = [];
+      for (let j = 0; j < 7; j++){
+        const date = addDays(lastDate, j);
+        const isRace = raceDate ? +date === +raceDate : j === 5;
+        days.push(isRace ? {date, role: 'RACE', kind: 'RACE', title: raceDate ? `Race day: ${A.distance}` : A.distance === '5K' ? 'Finish: run your first 5K' : 'Finish: run 30 minutes without stopping', miles: 0, sub: '', hint: 'Use the run-walk rhythm you trained with. Walking is allowed in every race.', steps: ['Warm up with 5 minutes of brisk walking', 'Start slower than feels necessary', 'Use the run-walk timing from your last few weeks if you need it', 'Finish strong, and enjoy it'], struct: [{kind:'warmup', dur:{s:300}, zone:null, name:'Brisk walk'}, {kind:'active', dur:{open:1}, zone:null, name: raceDate ? 'Race' : 'Run (lap to end)'}], lift: null}
+          : {date, role: 'off', kind: 'off', title: 'Rest', miles: 0, hint: HINT.off, steps: [], lift: null});
+      }
+      weeks.push({phase: 'runwalk', days, total: 0, sumText: 'Race week'});
+    }
+    const notes = {rwOnly: true, rwDone: all.done};
+    return {weeks: weeks.slice(0, N), notes, N: Math.min(N, weeks.length), pace: easyPace(), rw: true};
+  }
+  // Regular plan for the remaining weeks, starting from what 30 minutes x 3 runs looks like
+  const keep = {startDate: A.startDate, volume: A.volume, weeks: A.weeks, canRun: A.canRun};
+  const pace = easyPace();
+  const startVol = 3 * 30 / pace;
+  A.startDate = iso(addDays(parseDate(A.startDate), rw.weeks.length * 7));
+  A.volume = String(Math.round((A.units === 'km' ? startVol * KM : startVol) * 2) / 2);
+  if (A.timeline !== 'race') A.weeks = left;
+  A.canRun = '30';
+  let reg;
+  try { reg = buildPlan(); } finally { Object.assign(A, keep); }
+  reg.notes.rwThen = {rwWeeks: rw.weeks.length, regWeek: rw.weeks.length + 1};
+  delete reg.notes.floor;
+  return {weeks: rw.weeks.concat(reg.weeks), notes: reg.notes, N: rw.weeks.length + reg.weeks.length, pace: reg.pace, target: reg.target, peakVol: reg.peakVol, start: reg.start, goal: reg.goal, rw: true};
 }
 
 // =====================================================================
@@ -2369,7 +2555,8 @@ function exportXLSX(){
       }
       const dist = x ? (x.sport === 'Swim' ? x.swimDist : x.miles ? Math.round((unit === 'km' ? x.miles * KM : x.miles) * 10) / 10 : '')
                      : d.miles ? Math.round((unit === 'km' ? d.miles * KM : d.miles) * 2) / 2 : '';
-      rows.push([wi + 1, day, x ? x.sport : 'Run', x ? x.type : (TYPE[d.role] || 'Easy'), it.title, (it.steps || []).join(' | '), dist, x && x.mins ? x.mins : '', x ? x.intensity : (INT[d.role] || 'Easy'), iso(d.date), phase]);
+      const mins = x && x.mins ? x.mins : d.rwLevel !== undefined && !it.optional ? rwMinutes(RW_LEVELS[d.rwLevel]) : '';
+      rows.push([wi + 1, day, x ? x.sport : it.sport === 'Other' ? 'Other' : 'Run', x ? x.type : it.optional ? 'Optional' : d.kind === 'RW' ? 'Run-walk' : (TYPE[d.role] || 'Easy'), it.title, (it.steps || []).join(' | '), dist, mins, x ? x.intensity : (INT[d.role] || 'Easy'), iso(d.date), phase]);
     });
   }));
   const dv = [['B2:B2500', DAYS], ['C2:C2500', SPORTS], ['D2:D2500', TYPES], ['I2:I2500', INTENSITIES]];

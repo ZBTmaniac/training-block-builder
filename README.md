@@ -7,6 +7,7 @@ Build a run training plan, or upload your own, and keep it on your phone. No acc
 ## What it does
 
 - **Builds a run plan for you.** Answer seven quick questions (goal race, experience, recent volume, timeline, current fitness, run days, strength) and get a week-by-week plan for a 5K, 10K, half or marathon, with real workouts and training paces or heart-rate targets.
+- **Starts from zero.** Can't run 30 minutes yet? It begins with a run-walk phase and explains running terms in plain words.
 - **Adds strength training** matched to your equipment (bodyweight, dumbbells/kettlebells, or barbell), placed around your hard runs and long run.
 - **Follows your own plan.** Upload the template, any spreadsheet (.xlsx or .csv), or a plan written as a table in a document (.docx, or a Google Doc downloaded as Markdown). Run, bike, swim, brick and strength all work.
 - **Helps when life happens.** Tell it you missed a few days, a week, or more and it tells you what to keep, what to skip, and can push your plan back.
@@ -31,6 +32,7 @@ Once it's opened once, it works without a connection.
 
 These are the main rules. The full rules, with the plans and research they come from, are in [RULES.md](RULES.md).
 
+- **New runners** start with a run-walk phase (Couch to 5K style) until they can run 30 minutes without stopping, with plain-language workouts and a short guide to running words.
 - **Phases:** base → build → peak → taper. Base runs longer when your current volume is far below what the plan needs.
 - **Volume:** builds in steps (hold a level for a few weeks, then step up about 10–15%), with cutback weeks. Short timelines step faster, up to about 20%, and get flagged.
 - **Volume follows you, not the race.** A 5K plan for an experienced runner can have as much running as a half marathon plan. The race changes the workouts, not the mileage.

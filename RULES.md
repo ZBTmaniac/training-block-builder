@@ -8,6 +8,15 @@ The guiding principle: **flag, don't forbid.** When something looks risky or amb
 
 Goal distance (5K, 10K, half, marathon); experience (new, trained before, train regularly); recent weekly volume; race date or plan length; start date; a recent race or time trial (or a best guess, labeled as such); optional goal time; optional threshold heart rate (tested or watch estimate); run days per week (3–6; 3 is flagged); long run day and hard workout day; strength days and equipment; units; and race-day weather for race-date plans.
 
+## Getting started (new runners)
+
+- New runners, and anyone whose weekly volume is below the plan's starting floor, are asked how long they can run without stopping. A best guess is enough; an optional quick check is offered (5 minutes of brisk walking, then run at a talking pace until you need to walk).
+- Under 30 minutes gets a run-walk phase first, in the style of Couch to 5K: three sessions a week with a rest day between each, run and walk intervals that lengthen each week (1 min run / 1.5 min walk up to 30 minutes continuous), a 5-minute walk to warm up and cool down, and an optional easy walk on a 4th day.
+- Where you start depends on your answer: "not yet" and "under 5 minutes" start at the beginning, 5–15 minutes skips a few weeks, 15–25 minutes skips more. Any week can be repeated with one tap if it felt hard.
+- If enough weeks remain after reaching 30 minutes, the regular plan takes over from about 3 × 30 minutes a week. If not, the whole plan is run-walk and ends with the race (walk breaks welcome) or, without a race date, a finish run (your first 5K, or 30 minutes non-stop). A race date that's too close compresses the progression and says so.
+- Running words (easy, effort scale, strides, tempo, intervals, float, long run, cutback, taper, run-walk) are explained in the plan. Reading them is required before the plan is built only when it continues past run-walk.
+- New runners get plain-language workouts (effort out of 10 instead of RPE, "pickups" instead of strides, minutes alongside distance) and lighter strength: one session a week for the first month, starting around 6 out of 10, technique first.
+
 ## Phases
 
 - Base → build → peak → taper.
@@ -105,6 +114,7 @@ New runners get easier versions of the quality days. When marathon long runs car
 - Greg McMillan, McMillan Running 5K and 10K plans — volume and long-run prerequisites by level.
 - Pete Pfitzinger and Philip Latter, *Faster Road Racing* — 5K to half marathon volumes and medium-long runs.
 - Brad Hudson and Matt Fitzgerald, *Run Faster from the 5K to the Marathon* — short-race training structure.
+- NHS Couch to 5K and Jeff Galloway's run-walk method — run-walk progressions for new runners.
 
 ### Specific numbers
 

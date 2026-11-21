@@ -35,7 +35,10 @@
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 main{max-width:640px;margin:0 auto;padding:16px 16px 120px}
-button,input,select{font:inherit;color:inherit}
+button,input,select,textarea{font:inherit;color:inherit}
+/* iPhone zooms the page (and shifts it sideways) when a focused field's text is under 16px */
+input,select,textarea{font-size:16px!important}
+html,body{overflow-x:hidden}
 :focus-visible{outline:2px solid var(--run);outline-offset:2px}
 
 .step{font-size:14px;color:var(--muted);margin:4px 0 0}
@@ -61,7 +64,7 @@ h1{font-family:var(--display);font-weight:700;font-size:44px;line-height:.95;let
 
 label.field{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
 label.field:last-child{border-bottom:none}
-label.field input,label.field select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:150px;min-width:0}
+label.field input,label.field select{font-size:16px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:150px;min-width:0}
 .time{display:flex;gap:4px;align-items:center}
 .time input{width:52px!important;text-align:center;padding:8px 4px!important}
 

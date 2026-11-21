@@ -153,6 +153,10 @@ details.day summary::-webkit-details-marker{display:none}
   #print td,#print th{border-bottom:0.5pt solid #bbb;padding:3pt 4pt;vertical-align:top;text-align:left}
   #print tr{break-inside:avoid}
   #print .muted{color:#555}
+  #print .blk + .blk{margin-top:6pt;padding-top:5pt;border-top:0.5pt dashed #ccc}
+  #print .lbl{font-weight:600;font-size:9pt;color:#555;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2pt}
+  #print ul{margin:0;padding-left:12pt}
+  #print li{margin:0 0 2.5pt}
 }
 </style>
 </head>
@@ -173,7 +177,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.8.0';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.8.2';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -541,13 +545,18 @@ function showGlossary(){
 function toughNotes(){
   if (A.expert || A.distance !== 'Full') return null;
   const t = buildPlanAll().notes;
-  return (t.timeLimited || t.outkick || t.compressed) ? t : null;
+  // Stop-and-read page only when the peak lands well short of what a marathon plan usually needs.
+  // Smaller gaps and faster ramps stay as notes in the plan.
+  if (!t.timeLimited && !t.outkick) return null;
+  const usual = t.timeLimited ? t.timeLimited.target : t.outkick.target;
+  const reached = Math.min(t.timeLimited ? t.timeLimited.fit : Infinity, t.outkick ? t.outkick.peak : Infinity);
+  return reached < 0.85 * usual ? Object.assign({}, t, {reached, usual}) : null;
 }
 function needsAck(){ return !A.ackTough && !!toughNotes(); }
 function showAck(){
   const t = toughNotes(); ackMode = true;
   const lines = [];
-  if (t.timeLimited) lines.push(`At your easy pace, ${A.days} run days fit about ${fmtDist(t.timeLimited.fit)} a week within the safety caps. Marathon plans like this usually peak around ${fmtDist(t.timeLimited.target)}.`);
+  if (t.timeLimited && t.timeLimited.fit < 0.85 * t.timeLimited.target) lines.push(`At your easy pace, ${A.days} run days fit about ${fmtDist(t.timeLimited.fit)} a week within the safety caps. Marathon plans like this usually peak around ${fmtDist(t.timeLimited.target)}.`);
   if (t.outkick) lines.push(`Your timeline is too short to build safely to the usual peak. The plan tops out near ${fmtDist(t.outkick.peak)}.`);
   else if (t.compressed) lines.push('Your timeline is short, so volume steps up every 2 weeks with no cutback weeks.');
   lines.push('Lower training volume makes the last miles of a marathon much harder. That can mean a lot of walking.');
@@ -649,7 +658,7 @@ function rampVolumes(start, target, rampWeeks, notes){
   if (rampWeeks <= 0 || target <= start) return {levels: Array(rampWeeks).fill(start), cut: Array(rampWeeks).fill(false), peak: Math.max(start, target)};
   const tryMode = h => { const B = Math.ceil(rampWeeks / h); return {h, B, r: Math.pow(target / start, 1 / B)}; };
   let m = tryMode(4), mode = 'normal';
-  if (m.r - 1 > 0.15){ m = tryMode(2); mode = 'compressed'; }
+  if (m.r - 1 > 0.20){ m = tryMode(2); mode = 'compressed'; }   // Daniels: hold 3–4 weeks, then add about 1 mile per run (often ~20%)
   let peak = target;
   if (!A.expert && m.r - 1 > 0.20){ m.r = 1.20; peak = start * Math.pow(1.2, m.B); mode = 'compressed'; notes.outkick = {peak, target}; }
   if (mode === 'compressed') notes.compressed = true;
@@ -1332,7 +1341,7 @@ function drawPlan(){
       <div class="planbtns" style="margin-top:8px"><button id="xics">Calendar</button><button id="xpdf">PDF</button><button id="xxlsx">Excel</button></div>
       ${P.custom ? '' : `<div class="planbtns" style="margin-top:8px"><button id="xfit">Watch files (.fit)</button><button id="xzwo">TrainingPeaks/Zwift (.zwo)</button></div>`}
       <p id="watchmsg" class="flag" hidden></p>
-      <p class="quiet" style="margin:8px 0 0">Calendar adds sessions from today on as all-day events. PDF opens the print view: choose Save as PDF, or on iPhone tap Share → Print, then Share again to save the PDF.</p></div>
+      <p class="quiet" style="margin:8px 0 0">On a phone, Excel and watch files open your share sheet: choose Save to Files, or an app like Numbers or Google Sheets. Calendar adds sessions from today on as all-day events; on iPhone, use Safari, tap the downloads arrow, tap the file, then Add All. PDF opens the print view: choose Save as PDF, or on iPhone tap Share → Print, then Share again.</p></div>
     ${P.custom ? `<div class="planbtns"><button id="reupload">Upload a different plan</button><button id="makegen">Build a plan for me</button></div>`
                : `<div class="planbtns"><button id="editans">Edit answers</button><button id="toupload">Upload my own</button></div>`}`;
   $('pprev').onclick = () => { if (wk > 0){ wk--; drawPlan(); } };
@@ -2421,7 +2430,20 @@ function alertMsg(t){ const el = $('missed'); el.insertAdjacentHTML('beforeend',
 // =====================================================================
 // EXPORTS
 // =====================================================================
-function download(blob, name){
+// On phones, open the share sheet (Save to Files, open in Numbers/Sheets/Calendar, AirDrop...) instead of
+// dropping the file into the browser's own downloads folder. Desktop and anything without file sharing: normal download.
+function download(blob, name, noShare){
+  const touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  if (touch && !noShare && navigator.canShare && window.File){
+    const file = new File([blob], name, {type: blob.type || 'application/octet-stream'});
+    if (navigator.canShare({files: [file]})){
+      navigator.share({files: [file], title: name}).catch(e => { if (e && e.name !== 'AbortError') saveFile(blob, name); });
+      return;
+    }
+  }
+  saveFile(blob, name);
+}
+function saveFile(blob, name){
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click();
@@ -2452,17 +2474,21 @@ function exportICS(){
   const today = new Date(); today.setHours(0,0,0,0);
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
   const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Training Block Builder//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEsc(planName())];
+  const test = /[?&]calendar-test\b/.test(location.search);   // try the calendar flow with 2 events
+  let count = 0;
   sessionRows().forEach(({wi, d}, i) => {
     if (d.date < today) return;
+    if (test && count >= 2) return;
+    count++;
     const items = dayItems(d);
-    const summary = items.map(it => it.sub && it.sport !== 'Strength' ? `${it.title} · ${it.sub}` : it.title).join(' + ');
+    const summary = (test ? 'TEST: ' : '') + items.map(it => it.sub && it.sport !== 'Strength' ? `${it.title} · ${it.sub}` : it.title).join(' + ');
     const desc = items.map(it => [it.title + (it.sub && it.sport !== 'Strength' ? ' · ' + it.sub : '') + ':', ...(it.steps || []).map(x => '• ' + x)].join('\n')).concat([`Week ${wi + 1} of ${P.N}`]).join('\n\n');
     L.push('BEGIN:VEVENT', `UID:tbb-${ymd(d.date)}-${i}@training-block-builder`, 'DTSTAMP:' + stamp,
       'DTSTART;VALUE=DATE:' + ymd(d.date), 'DTEND;VALUE=DATE:' + ymd(addDays(d.date, 1)),
       icsFold('SUMMARY:' + icsEsc(summary)), icsFold('DESCRIPTION:' + icsEsc(desc)), 'TRANSP:TRANSPARENT', 'END:VEVENT');
   });
   L.push('END:VCALENDAR');
-  download(new Blob([L.join('\r\n') + '\r\n'], {type:'text/calendar'}), `${planName()}.ics`.replace(/\s+/g, '-'));
+  download(new Blob([L.join('\r\n') + '\r\n'], {type:'text/calendar'}), `${test ? 'TEST-' : ''}${planName()}.ics`.replace(/\s+/g, '-'), true);   // calendar files: a plain download hands off to Calendar; the share sheet doesn't
 }
 // ---------- PDF (print view) ----------
 function exportPDF(){
@@ -2472,7 +2498,7 @@ function exportPDF(){
     P.weeks.map((W, wi) => `<h2>Week ${wi + 1}${PHASE_NAME[W.phase] ? ': ' + PHASE_NAME[W.phase] : ''}${W.total ? ' · ' + fmtDist(W.total) + (P.custom ? ' run' : '') : ''}</h2><table>
       ${W.days.map(d => { const items = dayItems(d);
         return `<tr><td style="width:16%">${fmt(d.date)}</td><td style="width:28%">${items.length ? items.map(it => `<b>${esc(it.title)}</b>${it.sub && it.sport !== 'Strength' ? ' · ' + esc(it.sub) : ''}`).join('<br>') : '<b>Rest</b>'}</td>
-        <td>${items.map(it => (it.sport === 'Strength' ? `<span class="muted">${(it.steps || []).map(esc).join('; ')}</span>` : (it.steps || []).map(esc).join('<br>'))).filter(Boolean).join('<br>')}</td></tr>`; }).join('')}</table>`).join('');
+        <td>${items.filter(it => (it.steps || []).length).map(it => `<div class="blk">${items.length > 1 ? `<div class="lbl">${esc(it.sport === 'Strength' ? it.title : it.sport === 'Run' ? 'Run' : it.title)}</div>` : ''}<ul>${it.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</td></tr>`; }).join('')}</table>`).join('');
   window.print();
 }
 // ---------- Excel (.xlsx, written by hand: a zip of a few XML files) ----------

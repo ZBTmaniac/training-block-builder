@@ -177,7 +177,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.9.0';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.9.1';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -549,7 +549,10 @@ function toughNotes(){
   // Smaller gaps and faster ramps stay as notes in the plan.
   if (!t.timeLimited && !t.outkick) return null;
   const usual = t.timeLimited ? t.timeLimited.target : t.outkick.target;
-  const reached = Math.min(t.timeLimited ? t.timeLimited.fit : Infinity, t.outkick ? t.outkick.peak : Infinity);
+  // If even 6 days and the longest weekday runs can't fit the usual peak, it's pace, not a choice: no stop page, just a note.
+  const paceBound = t.timeLimited && t.timeLimited.best < 0.85 * t.timeLimited.target;
+  const reached = Math.min(t.timeLimited && !paceBound ? t.timeLimited.fit : Infinity, t.outkick ? t.outkick.peak : Infinity);
+  if (!isFinite(reached)) return null;
   return reached < 0.85 * usual ? Object.assign({}, t, {reached, usual}) : null;
 }
 function needsAck(){ return !A.ackTough && !!toughNotes(); }
@@ -1104,13 +1107,24 @@ function buildPlan(){
   // Time-aware ceiling: what fits in the week without breaking the long-run and single-run caps
   const tCap = (D === '5K' || D === '10K') ? {new:60, some:75, regular:90}[lvl] : 150;
   const lrCap0 = Math.min(tCap / pace, D === 'Full' ? (lvl === 'regular' ? 22 : 20) : D === 'Half' ? 15 : 13);
-  const wkCap = tuneCap();
-  const fitsAt = (k, c) => 0.95 * (lrCap0 + (k - 1) * (c / pace)
-    - (k >= 5 ? (c - 45) / pace : 0) + (k >= 5 ? Math.max(0, Math.min(0.7 * lrCap0, Math.max(90, c) / pace) - c / pace) : 0));
+  let wkCap = tuneCap();
+  // 5K/10K long runs are short, so weekday runs stay under them; a longer weekday limit stretches the long run with it
+  const shortRace = D === '5K' || D === '10K';
+  const lrTime = c => shortRace ? (c > 70 ? Math.max(tCap, c * 1.15) : tCap) : 150;
+  const wkEff = c => shortRace ? Math.min(c, 0.9 * lrTime(c)) : c;
+  const distCapL = D === 'Full' ? (lvl === 'regular' ? 22 : 20) : D === 'Half' ? 15 : 13;
+  const fitsAt = (k, c0) => { const c = wkEff(c0), lr = Math.min(lrTime(c0) / pace, distCapL);
+    return 0.95 * (lr + (k - 1) * (c / pace) - (k >= 5 ? Math.max(0, c - 45) / pace : 0) + (k >= 5 ? Math.max(0, Math.min(0.7 * lr, Math.max(90, c) / pace) - c / pace) : 0)); };
+  // Already running more than the caps allow? Let weekday runs go long enough to hold it (up to 90 min).
+  if (!A.expert && start > fitsAt(n, wkCap) + 1){
+    const c = [80, 90].find(c => c > wkCap && fitsAt(n, c) >= start) || 90;
+    if (c > wkCap){ notes.capRaised = c; wkCap = c; }
+  }
   const fits = k => fitsAt(k, wkCap);
   if (!A.expert && target > fits(n) + 1){
     notes.timeLimited = {target, fit: fits(n), next: n < 6 ? Math.min(target, fits(n + 1)) : null, overStart: start > fits(n),
-      at80: fitsAt(n, 80), at90: fitsAt(n, 90), cap: wkCap};
+      at80: fitsAt(n, 80), at90: fitsAt(n, 90), cap: wkCap,
+      best: fitsAt(6, wkCap)};   // the most more run days could fit at the current weekday limit
     target = Math.max(start, fits(n));
   }
   const gap = Math.max(0, Math.min(1, (target - start) / target));
@@ -1122,7 +1136,7 @@ function buildPlan(){
   const layout = weekLayout();
   const startDate = parseDate(A.startDate);
   const raceDate = A.timeline === 'race' ? parseDate(A.raceDate) : null;
-  const timeCap = A.expert ? Infinity : (D === '5K' || D === '10K') ? {new:60, some:75, regular:90}[lvl] : 150;
+  const timeCap = A.expert ? Infinity : lrTime(wkCap);
   const distCap = A.expert ? Infinity : D === 'Full' ? (lvl === 'regular' ? 22 : 20) : D === 'Half' ? 15 : 13;
   const minRun = 25 / pace, minRec = 20 / pace;
   const capMiAll = Math.min(timeCap / pace, distCap);
@@ -1134,7 +1148,7 @@ function buildPlan(){
   const extOK = !A.expert && D === 'Full' && extCap > capMiAll + 0.5 && N >= 16 && start * LONG_SHARE[n] >= 6;
   if (!A.expert && D === 'Full' && extCap > capMiAll + 0.5 && !extOK) notes.shortForExt = true;
   // Caps for runs other than the long run
-  const runCap = A.expert ? Infinity : wkCap / pace, recCap = A.expert ? Infinity : 45 / pace, mlrCap = Math.max(90, wkCap) / pace;
+  const runCap = A.expert ? Infinity : wkEff(wkCap) / pace, recCap = A.expert ? Infinity : 45 / pace, mlrCap = Math.max(90, wkCap) / pace;
   const circ = (a, b) => { const g = Math.abs(a - b); return Math.min(g, 7 - g); };
   const RW = {Q:1.15, T:1.15, E:1, R:0.7};
   // Split the non-long-run volume across the week. Single runs are capped; on 5-6 days the
@@ -1145,7 +1159,7 @@ function buildPlan(){
     const out = {}; let over = 0, mlr = -1;
     idxs.forEach(d => {
       const r = layout[d];
-      let m = Math.max(r === 'R' ? minRec : minRun, rest * RW[r] / sum);
+      let m = Math.max(r === 'R' ? minRec : Math.min(minRun, Math.max(minRec, 0.85 * longMi)), rest * RW[r] / sum);
       const cap = Math.min(r === 'R' ? recCap : runCap, A.expert ? Infinity : Math.max(minRun, 0.9 * longMi));   // never as long as the long run
       if (m > cap){ over += m - cap; m = cap; }
       out[d] = m;
@@ -1190,6 +1204,7 @@ function buildPlan(){
       const capThis = ext ? extCap : capMiAll;
       if (longMi > capThis){ longMi = capThis; if (!(D === '5K' || D === '10K')) notes.capped = true; }
       if (ext && longMi > capMiAll + 0.5) notes.extended = Math.max(notes.extended || 0, longMi);
+      longMi = Math.max(longMi, Math.min(capThis, minRun * 1.1));   // the long run stays longer than a regular run
       if (longMi / vol > 0.4) notes.share = true;
       bestLR = Math.max(bestLR, longMi);
       lrHist.push(longMi);
@@ -1292,14 +1307,12 @@ function noteList(){
     if (C.problems.length) out.push(`${C.problems.length} row${C.problems.length > 1 ? 's were' : ' was'} skipped when importing. Upload a fixed file to bring ${C.problems.length > 1 ? 'them' : 'it'} back.`);
     C.placement.slice(0, 10).forEach(t => out.push(t));
     if (C.placement.length > 10) out.push(`…and ${C.placement.length - 10} more scheduling notes.`);
-    out.push('Not medical advice. Listen to your body and adjust.');
     return out;
   }
-  if (A.expert) return ['Expert mode is on: volume, distance and time safety checks are off.', 'Not medical advice. Listen to your body and adjust.'];
+  if (A.expert) return ['Expert mode is on: volume, distance and time safety checks are off.'];
   if (N.rwOnly) out.push(`This plan gets you running: run-walk sessions three times a week that build ${N.rwDone ? 'to 30 minutes of running without stopping' : 'as far as your timeline allows, faster than ideal'}. ${A.timeline === 'race' ? 'You can absolutely race with walk breaks, and lots of people do.' : ''}`);
   if (N.rwThen) out.push(`Weeks 1–${N.rwThen.rwWeeks} get you running 30 minutes without stopping. From week ${N.rwThen.regWeek} it becomes a regular ${A.distance} plan, so read Running words before then.`);
-  if (needsRunWalk()) out.push('Run-walk weeks have three runs with a rest day between each. Your other days are rest or an optional walk while your legs adapt.');
-  if (needsRunWalk() && +A.strength) out.push('Strength starts with one light session a week for the first month.');
+  if (needsRunWalk()) out.push('Run-walk weeks have three runs with a rest day between each; other days are rest or an optional walk while your legs adapt.' + (+A.strength ? ' Strength starts with one light session a week for the first month.' : ''));
   if (+A.days === 3 && !N.rwOnly) out.push('On 3 run days, the long run is a big share of your week. A 4th short, easy run would make the plan easier on your body.');
   if (N.floor) out.push(`Week 1 starts at about ${fmtDist(N.floor)}, a bit above your recent volume, because this plan needs a minimum base.`);
   if (N.outkick) out.push(`Your timeline can't safely reach this plan's usual peak of ${fmtDist(N.outkick.target)}. It tops out near ${fmtDist(N.outkick.peak)}. A later race or shorter distance would help, or treat this as a finish-focused plan.`);
@@ -1307,7 +1320,12 @@ function noteList(){
   if (N.extended) out.push(`Your two dress-rehearsal long runs build to about 3 hours (${fmtDist(N.extended)}). Every other long run stays under about 2.5 hours, which is where injury risk starts to climb.`);
   else if (N.shortForExt && N.capped) out.push(`Long runs are capped at about 2.5 hours (around ${fmtDist(150 / P.pace)} at your easy pace). Building safely to 3 hours takes a plan of 16+ weeks and a starting long run of about 6 miles.`);
   else if (N.capped) out.push(`Long runs are capped at about 2.5 hours (around ${fmtDist(150 / P.pace)} at your easy pace). Your weekly miles do the rest of the endurance work.`);
-  if (N.timeLimited){
+  if (N.capRaised) out.push(`Your current volume is more than ${A.days} runs of 70 minutes or less can hold, so weekday runs go up to ${N.capRaised} minutes to keep it.`);
+  if (N.timeLimited && N.timeLimited.best < 0.85 * N.timeLimited.target){
+    const t = N.timeLimited;
+    out.push(`Plans like this usually peak around ${fmtDist(t.target)} a week. At your easy pace that's about ${Math.round(t.target * P.pace / 60)} hours, more than the long-run and single-run caps allow even on 6 days. So this plan is built around time on your feet and peaks near ${fmtDist(t.fit)}.` +
+      (tuneLevel() && t.cap < 90 ? ' Longer weekday runs can add a bit (see "Adjust how this plan builds").' : ''));
+  } else if (N.timeLimited){
     const t = N.timeLimited;
     out.push(`This plan usually peaks around ${fmtDist(t.target)} a week. At your easy pace, ${A.days} run days fit about ${fmtDist(t.fit)} without breaking the long-run and single-run caps, so that's your peak.` + (t.overStart ? ' Your current volume is already above that, so some weeks will come in under it.' : '') +
       (t.next && t.next > t.fit + 1 ? ` Adding one more easy day would raise it to about ${fmtDist(t.next)}.` : '') +
@@ -1330,7 +1348,6 @@ function noteList(){
     out.push(`Race day is likely ${A.heat}. Expect to run roughly ${sd[0]}–${sd[1]} seconds per ${A.units} slower than in cool weather${A.heatVsTraining === 'hotter' ? ', more since it\'s hotter than you train in' : ''}. The last two weeks before race week include heat-adaptation work.`);
   }
   if (A.benchKind === 'aspire') out.push('Your paces come from a best-guess time. Run a time trial in week 3 or 4 to check them.');
-  out.push('Not medical advice. Listen to your body and adjust.');
   return out;
 }
 function drawPlan(){
@@ -1381,12 +1398,12 @@ function drawPlan(){
     ${cards}
     ${goalCard()}
     <details class="card notes" id="gloss" style="margin-top:16px"><summary>Running words: what the workouts mean</summary>${glossaryHTML()}</details>
-    <details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
+    ${notes.length ? `<details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
       <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul>
       ${!P.custom && (P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}
-      ${spreadButton()}</details>
+      ${spreadButton()}</details>` : ''}
     ${tuneCard()}
-    <p class="quiet" style="margin:0 0 12px"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a> · Version ${APP_VERSION}</p>
+    <p class="quiet" style="margin:0 0 12px"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a> · Version ${APP_VERSION} · Not medical advice: listen to your body and adjust.</p>
     <details class="card notes"><summary>All weeks</summary><table class="overview">${overview}</table></details>
     <div class="card" id="missed" style="margin-top:16px">${missedPanel()}</div>
     ${icuCard()}
@@ -1573,7 +1590,8 @@ const SYN = {
   type: {easy:'Easy', e:'Easy', aerobic:'Easy', z2:'Easy', endurance:'Easy', 'easy run':'Easy', quality:'Quality', q:'Quality', intervals:'Quality', interval:'Quality',
          track:'Quality', speed:'Quality', vo2:'Quality', 'vo2 max':'Quality', workout:'Quality', hills:'Quality', fartlek:'Quality', tempo:'Tempo', t:'Tempo',
          threshold:'Tempo', 'sub-threshold':'Tempo', 'cruise intervals':'Tempo', steady:'Tempo', long:'Long', lr:'Long', 'long run':'Long', 'long ride':'Long',
-         recovery:'Recovery', rec:'Recovery', shakeout:'Recovery', race:'Race', 'race day':'Race', rest:'Rest', off:'Rest'},
+         recovery:'Recovery', rec:'Recovery', shakeout:'Recovery', race:'Race', 'race day':'Race', rest:'Rest', off:'Rest',
+         'run-walk':'Easy', 'run walk':'Easy', 'walk-run':'Easy', walk:'Easy', optional:'Easy'},
   intensity: {easy:'Easy', e:'Easy', low:'Easy', light:'Easy', moderate:'Moderate', mod:'Moderate', m:'Moderate', medium:'Moderate', med:'Moderate', steady:'Moderate',
               hard:'Hard', h:'Hard', high:'Hard', 'very hard':'Hard', max:'Hard'}
 };
@@ -1777,7 +1795,8 @@ function parseUpload(sheets, fileName){
     const title = String(get('title') ?? '').trim() || (sport === 'Strength' ? 'Strength' : sport === 'Rest' ? 'Rest' : `${type} ${sport.toLowerCase()}`.replace(/^Easy run$/, 'Easy run'));
     const details = String(get('details') ?? '').trim();
     const steps = details ? details.split(/\s*\|\s*|\r?\n|;\s+/).filter(Boolean) : [];
-    sessions.push({row: rn, week, day, sport, type, intensity, title, steps, miles: Math.round(miles * 10) / 10, mins: Math.round(mins), swimDist});
+    const optional = /^optional\b/i.test(String(get('type') ?? '').trim()) || /^optional\b/i.test(title);
+    sessions.push({row: rn, week, day, sport, type, intensity, title, steps, miles: Math.round(miles * 10) / 10, mins: Math.round(mins), swimDist, ...(optional ? {optional: true} : {})});
   }
   if (!seenAnything) return {fatal: 'The plan tab has a header row but no sessions under it.'};
   // strength tab

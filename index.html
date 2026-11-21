@@ -177,7 +177,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.8.1';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.8.2';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -545,13 +545,18 @@ function showGlossary(){
 function toughNotes(){
   if (A.expert || A.distance !== 'Full') return null;
   const t = buildPlanAll().notes;
-  return (t.timeLimited || t.outkick || t.compressed) ? t : null;
+  // Stop-and-read page only when the peak lands well short of what a marathon plan usually needs.
+  // Smaller gaps and faster ramps stay as notes in the plan.
+  if (!t.timeLimited && !t.outkick) return null;
+  const usual = t.timeLimited ? t.timeLimited.target : t.outkick.target;
+  const reached = Math.min(t.timeLimited ? t.timeLimited.fit : Infinity, t.outkick ? t.outkick.peak : Infinity);
+  return reached < 0.85 * usual ? Object.assign({}, t, {reached, usual}) : null;
 }
 function needsAck(){ return !A.ackTough && !!toughNotes(); }
 function showAck(){
   const t = toughNotes(); ackMode = true;
   const lines = [];
-  if (t.timeLimited) lines.push(`At your easy pace, ${A.days} run days fit about ${fmtDist(t.timeLimited.fit)} a week within the safety caps. Marathon plans like this usually peak around ${fmtDist(t.timeLimited.target)}.`);
+  if (t.timeLimited && t.timeLimited.fit < 0.85 * t.timeLimited.target) lines.push(`At your easy pace, ${A.days} run days fit about ${fmtDist(t.timeLimited.fit)} a week within the safety caps. Marathon plans like this usually peak around ${fmtDist(t.timeLimited.target)}.`);
   if (t.outkick) lines.push(`Your timeline is too short to build safely to the usual peak. The plan tops out near ${fmtDist(t.outkick.peak)}.`);
   else if (t.compressed) lines.push('Your timeline is short, so volume steps up every 2 weeks with no cutback weeks.');
   lines.push('Lower training volume makes the last miles of a marathon much harder. That can mean a lot of walking.');
@@ -653,7 +658,7 @@ function rampVolumes(start, target, rampWeeks, notes){
   if (rampWeeks <= 0 || target <= start) return {levels: Array(rampWeeks).fill(start), cut: Array(rampWeeks).fill(false), peak: Math.max(start, target)};
   const tryMode = h => { const B = Math.ceil(rampWeeks / h); return {h, B, r: Math.pow(target / start, 1 / B)}; };
   let m = tryMode(4), mode = 'normal';
-  if (m.r - 1 > 0.15){ m = tryMode(2); mode = 'compressed'; }
+  if (m.r - 1 > 0.20){ m = tryMode(2); mode = 'compressed'; }   // Daniels: hold 3–4 weeks, then add about 1 mile per run (often ~20%)
   let peak = target;
   if (!A.expert && m.r - 1 > 0.20){ m.r = 1.20; peak = start * Math.pow(1.2, m.B); mode = 'compressed'; notes.outkick = {peak, target}; }
   if (mode === 'compressed') notes.compressed = true;

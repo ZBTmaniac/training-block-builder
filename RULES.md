@@ -28,9 +28,10 @@ Goal distance (5K, 10K, half, marathon); experience (new, trained before, train 
 
 - Volume is set by the runner, not the race distance. 5K and 10K plans scale with experience; the distance changes the mix of workouts.
 - Starts at your recent volume, with a small floor for new runners.
-- Builds in steps: hold a level for about 3 weeks, cut back the 4th, then step up about 10–15% (after Daniels' approach of holding volume before increasing it).
-- Short timelines hold for 2 weeks and step up to about 20%. If the plan's usual peak still can't be reached, the plan peaks lower and says so.
+- Builds in steps: hold a level for about 3 weeks, cut back the 4th, then step up as much as about 20% (after Daniels' approach: hold volume 3–4 weeks, then add about a mile per run). Low starting volumes use the bigger steps; most plans step 10–15%.
+- Timelines too short for that hold for 2 weeks with no cutbacks, still stepping at most about 20%. If the plan's usual peak still can't be reached, the plan peaks lower and says so.
 - Peak volume is time-aware: if your run days can't fit the usual peak within the long-run and single-run caps at your easy pace, the plan peaks at what fits and suggests adding a run day.
+- Marathon plans stop for a "know what you're signing up for" page only when the peak lands more than about 15% under the usual peak. Smaller gaps and faster ramps are noted in the plan instead.
 
 ## Long runs
 

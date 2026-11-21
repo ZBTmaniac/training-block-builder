@@ -33,6 +33,13 @@ Goal distance (5K, 10K, half, marathon); experience (new, trained before, train 
 - Peak volume is time-aware: if your run days can't fit the usual peak within the long-run and single-run caps at your easy pace, the plan peaks at what fits and suggests adding a run day.
 - Marathon plans stop for a "know what you're signing up for" page only when the peak lands more than about 15% under the usual peak. Smaller gaps and faster ramps are noted in the plan instead.
 
+## Adjusting how a plan builds
+
+- New runners get no options: the plan builds steadily and weekday runs stay at 70 minutes or less.
+- Runners who have trained before can raise the weekday run limit to 80 or 90 minutes. The extra is spread across easy runs (and the easy parts of workout days) rather than added to one run; recovery runs and the long run don't change.
+- Runners who train regularly can also pick a build style: **Steady** (default: hold about 3 weeks, cut back the 4th, step up 10–20%), **Daniels** (hold 3 weeks, then add about a mile per run day, up to 10), or **Aggressive** (step every 2 weeks by up to 30%, no cutbacks), which asks for a confirmation.
+- Two rules apply at every level and can't be changed outside expert mode: no long run more than about 10% past the longest run of the past 4 weeks, and no weekday run as long as the long run. A 2025 study of about 5,200 runners found single-run jumps past the longest run of the past 30 days were the clearest injury predictor, more than week-to-week increases.
+
 ## Long runs
 
 - Built toward a distance-specific peak, then capped: the lesser of about 25–30% of the week and 150 minutes, with a 20-mile ceiling (after Daniels).
@@ -125,4 +132,5 @@ New runners get easier versions of the quality days. When marathon long runs car
 - Long-run share of weekly volume: [RunnersConnect](https://runnersconnect.net/?p=66988)
 - Strength and running economy: [Heavy resistance vs plyometric training, Sports Medicine – Open (2022)](https://pmc.ncbi.nlm.nih.gov/articles/PMC9653533/); [Strength training methods and running economy, Sports Medicine (2024)](https://link.springer.com/article/10.1007/s40279-023-01978-y); [Strength training for distance runners, Sports Medicine (2018)](https://link.springer.com/article/10.1007/s40279-017-0835-7)
 - Heat: [How much does heat slow your race pace, Outside](https://www.outsideonline.com/health/running/racing/race-strategy/how-much-does-heat-slow-your-race-pace/); [Heat and running speed, Marathon Handbook](https://marathonhandbook.com/heres-how-much-the-heat-it-affects-your-running-speed/); [Heat acclimation for endurance performance, Sports Medicine](https://pubmed.ncbi.nlm.nih.gov/25380791/)
+- Single-run spikes and injury: [Frandsen et al., "How much running is too much?", British Journal of Sports Medicine (2025)](https://pmc.ncbi.nlm.nih.gov/articles/PMC12421110/)
 - Race-time equivalents: Peter Riegel, "Athletic Records and Human Endurance," *American Scientist* (1981)

@@ -85,6 +85,17 @@ label.field input,label.field select{font-size:16px;background:var(--bg);border:
 .bar button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .bar button[hidden]{display:none}
 .bar button:disabled{opacity:.4;cursor:default}
+/* Plan view tabs: a phone-style bar at the bottom, always visible */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabbar div{max-width:640px;margin:0 auto;display:flex;gap:4px}
+.tabbar button{flex:1;border:0;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0 4px;border-radius:12px;color:var(--muted);font-size:13px;font-weight:600}
+.tabbar svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tabbar button[aria-selected="true"]{color:var(--ink);background:var(--bg)}
+.tabbar button[aria-selected="true"] svg{stroke:var(--run)}
+.tabhead{font-family:var(--display);font-weight:700;font-size:32px;line-height:1;margin:6px 0 4px}
+.nexttabs{display:flex;gap:10px;margin:20px 0 0}
+.nexttabs button{flex:1;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;cursor:pointer}
+.nexttabs b{display:block}.nexttabs span{font-size:13px;color:var(--muted)}
 .quiet{font-size:13px;color:var(--muted)}
 
 /* ---------- plan view ---------- */
@@ -173,6 +184,11 @@ details.day summary::-webkit-details-marker{display:none}
   </section>
   <section id="plan" hidden></section>
 </main>
+<nav class="tabbar" id="tabbar" role="tablist" aria-label="Plan sections" hidden><div>
+  <button role="tab" data-tab="week" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>This week</button>
+  <button role="tab" data-tab="plan" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>Whole plan</button>
+  <button role="tab" data-tab="take" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M5 12v6.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V12"/></svg>Export &amp; sync</button>
+</div></nav>
 <div id="print"></div>
 <nav class="bar" id="quizbar"><div>
   <button id="back">Back</button>
@@ -180,7 +196,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.9.1';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.10.0';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -1290,14 +1306,14 @@ function buildPlan(){
 let P = null, wk = 0;
 function showPlan(){
   P = A.mode === 'upload' && A.custom ? buildCustomPlan() : buildPlanAll();
-  $('quiz').hidden = true; $('quizbar').hidden = true; $('plan').hidden = false;
+  $('quiz').hidden = true; $('quizbar').hidden = true; $('plan').hidden = false; $('tabbar').hidden = false; ptab = 'week';
   const today = new Date(); today.setHours(0,0,0,0);
   const off = Math.floor((today - parseDate(A.startDate)) / (7 * 864e5));
   wk = Math.min(Math.max(off, 0), P.N - 1);
   drawPlan(); window.scrollTo(0, 0);
 }
 function showQuiz(where){
-  $('plan').hidden = true; $('quiz').hidden = false; $('quizbar').hidden = false;
+  $('plan').hidden = true; $('tabbar').hidden = true; $('quiz').hidden = false; $('quizbar').hidden = false;
   if (where === 'upload'){ showUpload(); window.scrollTo(0, 0); return; }
   if (where === 'gen'){ A.mode = 'gen'; save(); idx = 0; render(); window.scrollTo(0, 0); return; }
   idx = SCREENS.length - 1; render(); window.scrollTo(0, 0);
@@ -1387,6 +1403,7 @@ function drawPlan(){
   const overview = P.weeks.map((w, i) => `<tr class="${i === wk ? 'cur' : ''}"><td><button data-week="${i}">Week ${i+1}</button></td><td>${PHASE_NAME[w.phase] || ''}</td><td>${w.sumText || fmtDist(w.total) + (P.custom ? ' run' : '')}</td></tr>`).join('');
   const sportsUsed = P.custom ? [...new Set(A.custom.sessions.map(x => SPORT_CLS[x.sport]).filter(c => ['run','bike','swim','lift','other'].includes(c)))] : null;
   $('plan').innerHTML = `
+    <div data-pane="week" ${ptab === 'week' ? '' : 'hidden'}>
     <p class="phase">${P.custom ? esc(planName()) : `${PHASE_NAME[W.phase]} phase · ${esc(A.distance)} plan`}</p>
     <div class="weekrow"><div>
       <p class="weekno">Week ${wk + 1}<small> / ${P.N}</small></p>
@@ -1395,28 +1412,43 @@ function drawPlan(){
       <button id="pnext" aria-label="Next week" ${wk === P.N - 1 ? 'disabled' : ''}>›</button></div></div>
     ${PHASE_NOTE[W.phase] ? `<p class="weeknote">${PHASE_NOTE[W.phase]}</p>` : ''}
     ${W.phase === 'runwalk' && W.rwLevel !== undefined ? `<div class="planbtns" style="margin-top:8px"><button id="rwrepeat">This week felt hard: repeat it</button></div>` : ''}
-    ${P.notes && P.notes.rwThen && wk >= P.notes.rwThen.rwWeeks - 1 && wk <= P.notes.rwThen.rwWeeks ? `<p class="flag"><b>${wk < P.notes.rwThen.rwWeeks ? 'Next week' : 'This week'} you start regular running workouts.</b> Read <a href="#gloss">Running words</a> below first so the workouts make sense.</p>` : ''}
+    ${P.notes && P.notes.rwThen && wk >= P.notes.rwThen.rwWeeks - 1 && wk <= P.notes.rwThen.rwWeeks ? `<p class="flag"><b>${wk < P.notes.rwThen.rwWeeks ? 'Next week' : 'This week'} you start regular running workouts.</b> Read <a href="#gloss">Running words</a> (in Whole plan) first so the workouts make sense.</p>` : ''}
     <div class="strip">${strip}</div>
     <div class="legend">${sportsUsed ? sportsUsed.map(c => `<span class="l-${c}">${({run:'Run', bike:'Bike', swim:'Swim', lift:'Strength', other:'Cross-train'})[c]}</span>`).join('') : `<span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}`}</div>
     ${cards}
     ${goalCard()}
-    <details class="card notes" id="gloss" style="margin-top:16px"><summary>Running words: what the workouts mean</summary>${glossaryHTML()}</details>
+    <div class="nexttabs"><button data-tab="plan"><b>Whole plan</b><span>All weeks, notes, adjust the build</span></button>
+      <button data-tab="take"><b>Export &amp; sync</b><span>Calendar, PDF, Excel, watch</span></button></div>
+    </div>
+    <div data-pane="plan" ${ptab === 'plan' ? '' : 'hidden'}>
+    <p class="phase">${P.custom ? esc(planName()) : `${esc(A.distance)} plan · ${P.N} weeks`}</p>
+    <h2 class="tabhead">Whole plan</h2>
     ${notes.length ? `<details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
       <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul>
       ${!P.custom && (P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}
       ${spreadButton()}</details>` : ''}
     ${tuneCard()}
-    <p class="quiet" style="margin:0 0 12px"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a> · Version ${APP_VERSION} · Not medical advice: listen to your body and adjust.</p>
-    <details class="card notes"><summary>All weeks</summary><table class="overview">${overview}</table></details>
+    <details class="card notes" open style="margin-top:16px"><summary>All weeks</summary><table class="overview">${overview}</table></details>
+    <details class="card notes" id="gloss" style="margin-top:16px"><summary>Running words: what the workouts mean</summary>${glossaryHTML()}</details>
     <div class="card" id="missed" style="margin-top:16px">${missedPanel()}</div>
-    ${icuCard()}
-    <div class="card"><h3>Take your plan with you</h3>
+    ${P.custom ? `<div class="planbtns"><button id="reupload">Upload a different plan</button><button id="makegen">Build a plan for me</button></div>`
+               : `<div class="planbtns"><button id="editans">Edit answers</button><button id="toupload">Upload my own</button></div>`}
+    <p class="quiet" style="margin:12px 0"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a> · Version ${APP_VERSION} · Not medical advice: listen to your body and adjust.</p>
+    </div>
+    <div data-pane="take" ${ptab === 'take' ? '' : 'hidden'}>
+    <p class="phase">${P.custom ? esc(planName()) : `${esc(A.distance)} plan · ${P.N} weeks`}</p>
+    <h2 class="tabhead">Export &amp; sync</h2>
+    <div class="card" style="margin-top:12px"><h3>Take your plan with you</h3>
       <div class="planbtns" style="margin-top:8px"><button id="xics">Calendar</button><button id="xpdf">PDF</button><button id="xxlsx">Excel</button></div>
       ${P.custom ? '' : `<div class="planbtns" style="margin-top:8px"><button id="xfit">Watch files (.fit)</button><button id="xzwo">TrainingPeaks/Zwift (.zwo)</button></div>`}
       <p id="watchmsg" class="flag" hidden></p>
-      <p class="quiet" style="margin:8px 0 0">On a phone, Excel and watch files open your share sheet: choose Save to Files, or an app like Numbers or Google Sheets. Calendar adds sessions from today on as all-day events; on iPhone, use Safari, tap the downloads arrow, tap the file, then Add All. PDF opens the print view: choose Save as PDF, or on iPhone tap Share → Print, then Share again.</p></div>
-    ${P.custom ? `<div class="planbtns"><button id="reupload">Upload a different plan</button><button id="makegen">Build a plan for me</button></div>`
-               : `<div class="planbtns"><button id="editans">Edit answers</button><button id="toupload">Upload my own</button></div>`}`;
+      <details style="margin-top:10px"><summary class="quiet" style="cursor:pointer">How do I save these on a phone?</summary>
+        <ul class="quiet" style="margin:8px 0 0;padding-left:18px">
+          <li><b>Excel and watch files</b> open your share sheet: choose Save to Files, or an app like Numbers or Google Sheets.</li>
+          <li><b>Calendar</b> adds sessions from today on as all-day events. On iPhone, use Safari: tap the downloads arrow, tap the file, then Add All.</li>
+          <li><b>PDF</b> opens the print view: choose Save as PDF, or on iPhone tap Share → Print, then Share again.</li></ul></details></div>
+    ${icuCard()}
+    </div>`;
   $('pprev').onclick = () => { if (wk > 0){ wk--; drawPlan(); } };
   $('pnext').onclick = () => { if (wk < P.N - 1){ wk++; drawPlan(); } };
   if ($('editans')) $('editans').onclick = () => showQuiz();
@@ -1431,8 +1463,17 @@ function drawPlan(){
   $('missed').onclick = missedClick;
   if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
   if (!$('plan').dataset.tuneBound){ $('plan').addEventListener('click', tuneClick); $('plan').dataset.tuneBound = '1'; }
-  $('plan').querySelectorAll('[data-week]').forEach(b => b.onclick = () => { wk = +b.dataset.week; drawPlan(); window.scrollTo(0, 0); });
+  $('plan').querySelectorAll('[data-week]').forEach(b => b.onclick = () => { wk = +b.dataset.week; ptab = 'week'; drawPlan(); window.scrollTo(0, 0); });
+  $('plan').querySelectorAll('a[href="#gloss"]').forEach(a => a.onclick = e => { e.preventDefault(); setTab('plan'); const g = $('gloss'); g.open = true; g.scrollIntoView({block:'start'}); });
+  syncTabs();
 }
+let ptab = 'week';
+function syncTabs(){
+  document.querySelectorAll('#tabbar [data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === ptab)));
+  document.querySelectorAll('#plan [data-pane]').forEach(p => p.hidden = p.dataset.pane !== ptab);
+}
+function setTab(t){ if (!t || t === ptab) return; ptab = t; syncTabs(); window.scrollTo(0, 0); }
+document.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b && (b.closest('#tabbar') || b.closest('.nexttabs'))) setTab(b.dataset.tab); });
 function stepList(a){
   return a && a.length ? `<ul class="steps">${a.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
 }

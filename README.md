@@ -41,6 +41,8 @@ These are the main rules. The full rules, with the plans and research they come 
 - **Workouts:** hard days are hard, easy days are truly easy. Tempo days use float sets by default; race-specific work comes in the peak phase.
 - **Paces** come from a recent race or time trial. Goal times are checked against your projected fitness and rated on track, ambitious, or big stretch.
 - **Strength:** heavy, low-rep lifting plus jumps, on hard days, never the day before your long run. Any lifting is better than none.
+- **Adjust how it builds:** experienced runners can let weekday runs go to 80–90 minutes (spread over easy days) and pick a build style (Steady, Daniels, or Aggressive). New runners don't see these options.
+- **Single-run rule:** no long run more than about 10% past your longest of the past month, at every level.
 - **Expert mode** turns off the safety caps for people who know what they're doing.
 
 </details>

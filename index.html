@@ -177,7 +177,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.8.2';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.9.0';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -189,7 +189,7 @@ const DEFAULTS = {
   expert:false, ackTough:false,
   lthr:'', lthrSource:'test', effort:'pace',
   mode:'gen', custom:null,
-  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false
+  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false, tuneStyle:'steady', tuneCap:70, tuneOpen:false
 };
 let A = load();
 let idx = 0;
@@ -654,8 +654,24 @@ function phaseList(N, gap){
 }
 
 // Step-up ramp: hold a level, then step. Normal = 3 weeks + a cutback week; compressed = 2-week holds.
-function rampVolumes(start, target, rampWeeks, notes){
+function rampVolumes(start, target, rampWeeks, notes, style = 'steady'){
   if (rampWeeks <= 0 || target <= start) return {levels: Array(rampWeeks).fill(start), cut: Array(rampWeeks).fill(false), peak: Math.max(start, target)};
+  if (style === 'daniels'){
+    // Hold 3 weeks, then add about 1 mile per run day (Daniels caps the step at 10)
+    const step = Math.min(+A.days || 5, 10), levels = [];
+    for (let w = 0; w < rampWeeks; w++) levels.push(Math.min(target, start + step * Math.floor(w / 3)));
+    const top = Math.min(target, start + step * Math.floor(rampWeeks / 3));
+    if (top < target - 0.5) notes.styleShort = {peak: top, target};
+    notes.style = 'daniels';
+    return {levels, cut: Array(rampWeeks).fill(false), peak: top};
+  }
+  if (style === 'aggressive'){
+    const B = Math.ceil(rampWeeks / 2);
+    let r = Math.pow(target / start, 1 / B), peak = target;
+    if (r > 1.30){ r = 1.30; peak = start * Math.pow(r, B); notes.styleShort = {peak, target}; }
+    notes.style = 'aggressive';
+    return {levels: Array.from({length: rampWeeks}, (_, w) => start * Math.pow(r, Math.floor(w / 2))), cut: Array(rampWeeks).fill(false), peak};
+  }
   const tryMode = h => { const B = Math.ceil(rampWeeks / h); return {h, B, r: Math.pow(target / start, 1 / B)}; };
   let m = tryMode(4), mode = 'normal';
   if (m.r - 1 > 0.20){ m = tryMode(2); mode = 'compressed'; }   // Daniels: hold 3–4 weeks, then add about 1 mile per run (often ~20%)
@@ -1055,6 +1071,23 @@ const HINT = {
   off:'Rest, walk, or easy cross-training.'
 };
 
+// =====================================================================
+// TUNING: how the plan builds. New runners get no options; "trained before" can lengthen
+// weekday runs; "train regularly" can also pick a build style. Two rules never change:
+// no long run more than ~10% past the longest of the past month, and no weekday run as long as the long run.
+// =====================================================================
+function tuneLevel(){
+  if (A.expert || A.mode === 'upload' || needsRunWalk()) return '';
+  return A.experience === 'regular' ? 'full' : A.experience === 'some' ? 'limit' : '';
+}
+const tStyle = () => tuneLevel() === 'full' && ['daniels', 'aggressive'].includes(A.tuneStyle) ? A.tuneStyle : 'steady';
+const tuneCap = () => tuneLevel() && [80, 90].includes(+A.tuneCap) ? +A.tuneCap : 70;
+const STYLE_INFO = {
+  steady: ['Steady', 'Hold about 3 weeks, cut back the 4th, then step up 10–20%.'],
+  daniels: ['Daniels', 'Hold 3 weeks, then add about a mile per run day (up to 10 a week). No planned cutbacks.'],
+  aggressive: ['Aggressive', 'Step up every 2 weeks by as much as 30%, no cutbacks. Reaches a higher peak sooner, with a higher injury risk.']
+};
+
 function buildPlan(){
   const notes = {};
   const N = planWeeks();
@@ -1071,16 +1104,19 @@ function buildPlan(){
   // Time-aware ceiling: what fits in the week without breaking the long-run and single-run caps
   const tCap = (D === '5K' || D === '10K') ? {new:60, some:75, regular:90}[lvl] : 150;
   const lrCap0 = Math.min(tCap / pace, D === 'Full' ? (lvl === 'regular' ? 22 : 20) : D === 'Half' ? 15 : 13);
-  const fits = k => 0.95 * (lrCap0 + (k - 1) * (70 / pace)
-    - (k >= 5 ? (70 - 45) / pace : 0) + (k >= 5 ? Math.max(0, Math.min(0.7 * lrCap0, 90 / pace) - 70 / pace) : 0));
+  const wkCap = tuneCap();
+  const fitsAt = (k, c) => 0.95 * (lrCap0 + (k - 1) * (c / pace)
+    - (k >= 5 ? (c - 45) / pace : 0) + (k >= 5 ? Math.max(0, Math.min(0.7 * lrCap0, Math.max(90, c) / pace) - c / pace) : 0));
+  const fits = k => fitsAt(k, wkCap);
   if (!A.expert && target > fits(n) + 1){
-    notes.timeLimited = {target, fit: fits(n), next: n < 6 ? Math.min(target, fits(n + 1)) : null, overStart: start > fits(n)};
+    notes.timeLimited = {target, fit: fits(n), next: n < 6 ? Math.min(target, fits(n + 1)) : null, overStart: start > fits(n),
+      at80: fitsAt(n, 80), at90: fitsAt(n, 90), cap: wkCap};
     target = Math.max(start, fits(n));
   }
   const gap = Math.max(0, Math.min(1, (target - start) / target));
   const phases = phaseList(N, gap);
   const rampWeeks = phases.filter(p => p === 'base' || p === 'build').length;
-  const ramp = rampVolumes(start, target, rampWeeks, notes);
+  const ramp = rampVolumes(start, target, rampWeeks, notes, tStyle());
   const peakVol = rampWeeks ? ramp.peak : Math.max(start, Math.min(target, start * 1.1));
   const taperMult = {3:[0.8,0.65,0.45], 2:[0.75,0.5], 1:[0.6]}[phases.filter(p => p === 'taper').length];
   const layout = weekLayout();
@@ -1098,7 +1134,7 @@ function buildPlan(){
   const extOK = !A.expert && D === 'Full' && extCap > capMiAll + 0.5 && N >= 16 && start * LONG_SHARE[n] >= 6;
   if (!A.expert && D === 'Full' && extCap > capMiAll + 0.5 && !extOK) notes.shortForExt = true;
   // Caps for runs other than the long run
-  const runCap = A.expert ? Infinity : 70 / pace, recCap = A.expert ? Infinity : 45 / pace, mlrCap = 90 / pace;
+  const runCap = A.expert ? Infinity : wkCap / pace, recCap = A.expert ? Infinity : 45 / pace, mlrCap = Math.max(90, wkCap) / pace;
   const circ = (a, b) => { const g = Math.abs(a - b); return Math.min(g, 7 - g); };
   const RW = {Q:1.15, T:1.15, E:1, R:0.7};
   // Split the non-long-run volume across the week. Single runs are capped; on 5-6 days the
@@ -1110,7 +1146,7 @@ function buildPlan(){
     idxs.forEach(d => {
       const r = layout[d];
       let m = Math.max(r === 'R' ? minRec : minRun, rest * RW[r] / sum);
-      const cap = r === 'R' ? recCap : runCap;
+      const cap = Math.min(r === 'R' ? recCap : runCap, A.expert ? Infinity : Math.max(minRun, 0.9 * longMi));   // never as long as the long run
       if (m > cap){ over += m - cap; m = cap; }
       out[d] = m;
     });
@@ -1119,7 +1155,7 @@ function buildPlan(){
       const eDays = idxs.filter(d => layout[d] === 'E').sort((a, b) => circ(b, L) - circ(a, L));
       if (eDays.length){
         mlr = eDays[0];
-        const add = Math.min(over, Math.max(0, Math.min(0.7 * longMi, mlrCap) - out[mlr]));
+        const add = Math.min(over, Math.max(0, Math.min(A.expert ? Infinity : 0.9 * longMi, 0.7 * longMi, mlrCap) - out[mlr]));
         out[mlr] += add; over -= add;
       }
     }
@@ -1128,6 +1164,7 @@ function buildPlan(){
   const strengthN = +A.strength || 0;
 
   let ti = 0, bestLR = 0;
+  const lrHist = [];   // long runs so far, for the ~10% single-run rule
   const weeks = phases.map((phase, w) => {
     let vol = phase === 'taper' ? peakVol * taperMult[ti++] : phase === 'peak' ? peakVol : ramp.levels[w];
     const isLast = w === N - 1;
@@ -1135,6 +1172,7 @@ function buildPlan(){
     // never more than ~55% of the week, then capped by time and distance.
     const startLR = start * LONG_SHARE[n];
     const peakLR = Math.max(startLR, LR_PEAK[D][lvl]);
+    notes.peakLR = Math.min(peakLR, extOK ? extCap : capMiAll);
     let longMi;
     if (phase === 'taper') longMi = bestLR * taperMult[ti - 1];
     else {
@@ -1144,11 +1182,17 @@ function buildPlan(){
       const ext = extOK && rehearsals.has(w);
       if (ext) longMi = Math.max(longMi, extCap);
       longMi = Math.min(longMi, vol * (A.expert ? 1 : 0.55));
+      // Single-run rule: no long run more than ~10% past the longest of the past 4 weeks
+      if (!A.expert){
+        const recentMax = Math.max(startLR, ...lrHist.slice(-4));
+        if (longMi > recentMax * 1.1){ longMi = recentMax * 1.1; notes.lrStep = true; }
+      }
       const capThis = ext ? extCap : capMiAll;
       if (longMi > capThis){ longMi = capThis; if (!(D === '5K' || D === '10K')) notes.capped = true; }
       if (ext && longMi > capMiAll + 0.5) notes.extended = Math.max(notes.extended || 0, longMi);
       if (longMi / vol > 0.4) notes.share = true;
       bestLR = Math.max(bestLR, longMi);
+      lrHist.push(longMi);
     }
     const rest = Math.max(0, vol - longMi);
     const al = allocate(rest, longMi);
@@ -1176,7 +1220,7 @@ function buildPlan(){
         else if (daysToRace === 2 && role !== 'off'){ role = 'E'; title = 'Shakeout + strides'; miles = minRec; hintKey = 'SH'; }
         else if (role === 'L'){ role = 'E'; title = 'Easy run'; miles = minRun; hintKey = 'E'; }
       } else if (!raceDate && isLast && role === 'L'){
-        title = 'Time trial or goal effort'; hintKey = 'TT'; miles = Math.max(DIST_MI[A.distance] + 2, minRun);
+        title = 'Time trial or goal effort'; hintKey = 'TT'; miles = Math.max((A.distance === '5K' || A.distance === '10K' ? DIST_MI[A.distance] : 6.214) + 2, minRun);   // half/full: a 10K effort, not a full-distance run
       }
       days.push({date, role, title, miles: miles ? r5(miles) : 0, hint: HINT[hintKey] || '', lift: null, kind: hintKey, strides: !!ctx.strides, rehearsal: role === 'L' && !!ctx.rehearsal});
     }
@@ -1197,7 +1241,7 @@ function buildPlan(){
       used.push(i); sCount--;
     }
     const total = days.reduce((s, d) => s + (d.role === 'RACE' ? 0 : d.miles), 0);
-    return {phase, days, total, cut: !!(ramp.cut && ramp.cut[w])};
+    return {phase, days, total, cut: !!(ramp.cut && ramp.cut[w]), capHit: phase !== 'taper' && (al.over > 0.5 || longMi >= capMiAll - 0.05)};
   });
   // Fill in workouts: progress (0..1) through each phase drives rep counts
   const pCount = {}, pSeen = {};
@@ -1259,15 +1303,22 @@ function noteList(){
   if (+A.days === 3 && !N.rwOnly) out.push('On 3 run days, the long run is a big share of your week. A 4th short, easy run would make the plan easier on your body.');
   if (N.floor) out.push(`Week 1 starts at about ${fmtDist(N.floor)}, a bit above your recent volume, because this plan needs a minimum base.`);
   if (N.outkick) out.push(`Your timeline can't safely reach this plan's usual peak of ${fmtDist(N.outkick.target)}. It tops out near ${fmtDist(N.outkick.peak)}. A later race or shorter distance would help, or treat this as a finish-focused plan.`);
-  else if (N.compressed) out.push('Short timeline: volume steps up every 2 weeks with no cutback weeks. Back off if you feel run down.');
+  else if (N.compressed && !N.style) out.push('Short timeline: volume steps up every 2 weeks with no cutback weeks. Back off if you feel run down.');
   if (N.extended) out.push(`Your two dress-rehearsal long runs build to about 3 hours (${fmtDist(N.extended)}). Every other long run stays under about 2.5 hours, which is where injury risk starts to climb.`);
   else if (N.shortForExt && N.capped) out.push(`Long runs are capped at about 2.5 hours (around ${fmtDist(150 / P.pace)} at your easy pace). Building safely to 3 hours takes a plan of 16+ weeks and a starting long run of about 6 miles.`);
   else if (N.capped) out.push(`Long runs are capped at about 2.5 hours (around ${fmtDist(150 / P.pace)} at your easy pace). Your weekly miles do the rest of the endurance work.`);
   if (N.timeLimited){
     const t = N.timeLimited;
     out.push(`This plan usually peaks around ${fmtDist(t.target)} a week. At your easy pace, ${A.days} run days fit about ${fmtDist(t.fit)} without breaking the long-run and single-run caps, so that's your peak.` + (t.overStart ? ' Your current volume is already above that, so some weeks will come in under it.' : '') +
-      (t.next && t.next > t.fit + 1 ? ` Adding one more easy day would raise it to about ${fmtDist(t.next)}.` : ''));
+      (t.next && t.next > t.fit + 1 ? ` Adding one more easy day would raise it to about ${fmtDist(t.next)}.` : '') +
+      (tuneLevel() === 'full' ? ' To close the gap, open "Adjust how this plan builds" below.'
+        : tuneLevel() === 'limit' && t.cap < 90 ? ' You can also let weekday runs go a little longer (button below).'
+        : !tuneLevel() && A.experience === 'new' ? " That's a solid plan to finish on. If you want more, a half marathon first is a great way to build up." : ''));
   }
+  if (N.styleShort) out.push(`At this build style, your timeline tops out near ${fmtDist(N.styleShort.peak)} instead of ${fmtDist(N.styleShort.target)}.`);
+  if (N.style === 'aggressive') out.push('Aggressive build: volume steps up every 2 weeks with no cutback weeks. Back off at the first sign of a niggle.');
+  if (N.lrStep && P.weeks && Math.max(...P.weeks.flatMap(w => w.days.filter(d => d.role === 'L').map(d => d.miles))) < N.peakLR - 0.5)
+    out.push('Long runs build by no more than about 10% over your longest run of the past month, since single-run jumps are the clearest injury predictor. On this timeline that keeps your longest run a bit under the usual peak.');
   if (N.addDay && !N.timeLimited) out.push(+A.days < 6
     ? `Some weeks come up about ${fmtDist(N.addDay)} short of this plan's target, because long runs and single runs are capped. Adding one more easy run day would cover it.`
     : `Some weeks come up about ${fmtDist(N.addDay)} short of this plan's target because runs are capped. That's fine; the caps protect you.`);
@@ -1332,7 +1383,9 @@ function drawPlan(){
     <details class="card notes" id="gloss" style="margin-top:16px"><summary>Running words: what the workouts mean</summary>${glossaryHTML()}</details>
     <details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
       <ul>${notes.map(t => `<li style="margin:6px 0">${esc(t)}</li>`).join('')}</ul>
-      ${!P.custom && (P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}</details>
+      ${!P.custom && (P.notes.addDay || (P.notes.timeLimited && P.notes.timeLimited.next)) && +A.days < 6 ? `<div class="planbtns" style="margin-top:8px"><button id="addday">Add a run day (${+A.days + 1} days)</button></div>` : ''}
+      ${spreadButton()}</details>
+    ${tuneCard()}
     <p class="quiet" style="margin:0 0 12px"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a> · Version ${APP_VERSION}</p>
     <details class="card notes"><summary>All weeks</summary><table class="overview">${overview}</table></details>
     <div class="card" id="missed" style="margin-top:16px">${missedPanel()}</div>
@@ -1357,6 +1410,7 @@ function drawPlan(){
   $('xics').onclick = exportICS; $('xpdf').onclick = exportPDF; $('xxlsx').onclick = exportXLSX;
   $('missed').onclick = missedClick;
   if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
+  if (!$('plan').dataset.tuneBound){ $('plan').addEventListener('click', tuneClick); $('plan').dataset.tuneBound = '1'; }
   $('plan').querySelectorAll('[data-week]').forEach(b => b.onclick = () => { wk = +b.dataset.week; drawPlan(); window.scrollTo(0, 0); });
 }
 function stepList(a){
@@ -1426,6 +1480,67 @@ function glossaryHTML(){
     <h3 style="margin:16px 0 6px;font-size:16px">The effort scale</h3>
     <table class="overview">${RPE_SCALE.map(([n, d]) => `<tr><td style="width:56px"><b>${n}</b></td><td style="text-align:left">${esc(d)}</td></tr>`).join('')}</table>`;
 }
+function spreadButton(){
+  const t = P && !P.custom && P.notes.timeLimited;
+  if (!t || tuneLevel() !== 'limit' || t.cap >= 90) return '';
+  const to = t.at80 >= t.target - 1 ? 80 : 90, gets = Math.min(t.target, to === 80 ? t.at80 : t.at90);
+  return `<div class="planbtns" style="margin-top:8px"><button data-tune="cap" data-val="${to}">Spread the extra over easy days: up to ${to} min, peak about ${fmtDist(gets)}</button></div>`;
+}
+function planStats(){
+  const runs = P.weeks.flatMap(W => W.days.filter(d => d.miles && d.role !== 'RACE' && d.kind !== 'TT').map(d => ({d, W})));
+  const weekday = runs.filter(x => x.d.role !== 'L').map(x => x.d.miles);
+  // Biggest jump: any run vs the longest run in the previous 28 days (week 1 compared with your starting long run)
+  let jump = 0; const start = P.start ? P.start * LONG_SHARE[+A.days] : 0;
+  runs.forEach(({d}) => {
+    const prev = runs.filter(x => x.d.date < d.date && d.date - x.d.date <= 28 * 864e5).map(x => x.d.miles);
+    const ref = Math.max(start, ...prev);
+    if (ref > 0) jump = Math.max(jump, d.miles / ref - 1);
+  });
+  return {peak: Math.max(...P.weeks.map(W => W.total)), weekdayMin: weekday.length ? Math.max(...weekday) * P.pace : 0,
+    jump, capWeeks: P.weeks.filter(W => W.capHit).length, peakWeek: P.weeks.findIndex(W => W.total >= 0.97 * Math.max(...P.weeks.map(x => x.total))) + 1};
+}
+function tuneCard(){
+  const lvl = tuneLevel();
+  if (!lvl || !P || P.custom || P.rw) return '';
+  const st = planStats(), style = tStyle(), cap = tuneCap();
+  const btn = (k, v, label, sub, on) => `<button type="button" class="choice" data-tune="${k}" data-val="${v}" aria-pressed="${on}"><b>${label}</b>${sub ? `<span>${sub}</span>` : ''}</button>`;
+  return `<details class="card notes" id="tune" style="margin-top:16px"${A.tuneOpen ? ' open' : ''}><summary>Adjust how this plan builds</summary>
+    <h3 style="margin:12px 0 4px;font-size:16px">Weekday run limit</h3>
+    <p class="quiet" style="margin:0 0 8px">Extra miles are spread across your easy runs. Recovery runs and the long run don't change.</p>
+    <div class="choices row">${[70, 80, 90].map(c => btn('cap', c, c + ' min', '', cap === c)).join('')}</div>
+    ${lvl === 'full' ? `<h3 style="margin:16px 0 8px;font-size:16px">Build style</h3>
+    <div class="choices">${['steady', 'daniels', 'aggressive'].map(k => btn('style', k, STYLE_INFO[k][0] + (k === 'steady' ? ' (recommended)' : ''), STYLE_INFO[k][1], style === k)).join('')}</div>
+    ${tuneAsk ? `<p class="flag" style="margin-top:10px"><b>Higher injury risk.</b> Faster build-ups with no cutback weeks leave less room to recover. Fine if you've handled this volume before; risky if you haven't.</p>
+      <div class="planbtns"><button data-tune="aggr-ok">Use Aggressive anyway</button><button data-tune="aggr-cancel">Keep my current build</button></div>` : ''}` : ''}
+    <h3 style="margin:16px 0 4px;font-size:16px">What that gives you</h3>
+    <table class="overview">
+      <tr><td style="text-align:left">Peak week</td><td>${fmtDist(st.peak)}</td></tr>
+      <tr><td style="text-align:left">First reach it</td><td>week ${st.peakWeek}</td></tr>
+      <tr><td style="text-align:left">Longest weekday run</td><td>about ${Math.round(st.weekdayMin / 5) * 5} min</td></tr>
+      <tr><td style="text-align:left">Biggest single-run jump vs. your past month</td><td>${Math.round(st.jump * 100)}%</td></tr>
+      <tr><td style="text-align:left">Weeks held back by a cap</td><td>${st.capWeeks} of ${P.N}</td></tr>
+    </table>
+    <p class="quiet" style="margin:8px 0 0">Always on: no long run more than about 10% past your longest of the past month, and no weekday run as long as the long run.</p>
+    ${cap !== 70 || style !== 'steady' ? `<div class="planbtns" style="margin-top:10px"><button data-tune="reset">Reset to recommended</button></div>` : ''}
+  </details>`;
+}
+let tuneAsk = false;
+function tuneClick(e){
+  const b = e.target.closest('[data-tune]');
+  if (!b) return;
+  const k = b.dataset.tune, v = b.dataset.val;
+  A.tuneOpen = !!b.closest('#tune');
+  if (k === 'cap') A.tuneCap = +v;
+  else if (k === 'style'){
+    if (v === 'aggressive' && A.tuneStyle !== 'aggressive'){ tuneAsk = true; drawPlan(); keepTune(); return; }
+    A.tuneStyle = v; tuneAsk = false;
+  }
+  else if (k === 'aggr-ok'){ A.tuneStyle = 'aggressive'; tuneAsk = false; }
+  else if (k === 'aggr-cancel'){ tuneAsk = false; drawPlan(); keepTune(); return; }
+  else if (k === 'reset'){ A.tuneCap = 70; A.tuneStyle = 'steady'; tuneAsk = false; }
+  save(); P = buildPlanAll(); drawPlan(); keepTune();
+}
+function keepTune(){ const t = $('tune'); if (t && A.tuneOpen){ t.open = true; } }
 function liftHint(t){
   const eq = {bw:'Bodyweight', db:'Dumbbells/kettlebells', bb:'Barbell'}[A.equipment] || '';
   if (t.includes('heavy')) return `${eq}. After your run, ideally 6+ hours later. The first lift is the heavy one; the rest support it.`;

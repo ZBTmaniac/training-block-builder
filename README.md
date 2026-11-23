@@ -33,16 +33,19 @@ Once it's opened once, it works without a connection.
 - New to running? If you can't run 30 minutes yet, it starts with a run-walk phase and explains running terms in plain words.
 - Adds strength training matched to your equipment (bodyweight, dumbbells/kettlebells, or barbell), placed around your hard runs and long run.
 - Plans for heat: a warm race gets heat-adaptation work and race-day guidance.
+- Race week gets a guide: carb loading done right, fueling you've practiced, target pace and splits, what to wear, and a send-off.
 
 **Fits your life**
 
 - Move a session to another day in the week, or swap a hard workout for an easy run when the day goes sideways.
 - Missed a few days, a week, or more? It tells you what to keep, what to skip, and can push your plan back.
+- After the race, enter your time: it becomes your new benchmark, and the app suggests recovery and a different next challenge.
 - Follow your own plan instead: upload the template, any spreadsheet (.xlsx or .csv), or a plan written as a table in a document (.docx, or a Google Doc downloaded as Markdown). Run, bike, swim, brick, and strength all work.
 
 **Goes where you train**
 
 - Add sessions to your calendar, save a PDF, or download an Excel file you can edit and upload again.
+- Save a backup file to move your plan to a new phone, or share your plan setup with a friend.
 - Download structured workouts for your watch (`.fit` for Garmin, Coros, and Intervals.icu; `.zwo` for TrainingPeaks and Zwift), or send your plan straight to your Intervals.icu calendar.
 
 ## How plans are built
@@ -72,9 +75,21 @@ Watch files are made for generated run workouts, with pace or heart-rate targets
 
 ## Privacy
 
-Everything you enter, and every file you upload, stays on your device. There's no account, no tracking, and no server receiving your data. Clearing your browser data clears your plan.
+Everything you enter, and every file you upload, stays on your device. There's no account, no tracking, and no server receiving your data. Clearing your browser data clears your plan, so save a backup now and then (Export & sync → Keep your plan safe). Adding the app to your Home Screen also helps, since browsers can clear saved data for websites you haven't visited in a while.
+
+Backup files never include your Intervals.icu API key. A shared plan link carries only your plan setup (race, dates, run days, and strength choices), not your fitness, goal time, heart rate, or check-ins.
+
+When a new version is published, the app shows a banner. Updating keeps your plan, and the app saves a copy on your device first in case anything goes wrong.
 
 If you use **Send to Intervals.icu**, your API key is saved only on your device and sent only to intervals.icu. The key gives full access to your Intervals.icu account, so don't save it on a shared device.
+
+## Feedback
+
+Found something confusing, broken, or missing? [Send feedback](https://github.com/ZBTmaniac/training-block-builder/issues/new?template=feedback.yml) (needs a free GitHub account). Feedback posts are public, so leave out personal details.
+
+## Accessibility
+
+The app works with screen readers and a keyboard, and has a color-blind friendly palette (Whole plan → Display). Every color also has a text label, and the PDF is text only.
 
 ## Not medical advice
 

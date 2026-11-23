@@ -1,5 +1,5 @@
 // Bump this version whenever you upload a new index.html
-const CACHE = 'block-builder-v27';
+const CACHE = 'block-builder-v29';
 const FILES = ['./', './index.html', './bb-manifest.json', './bb-icon-180.png', './bb-icon-192.png', './bb-icon-512.png', './apple-touch-icon.png', './favicon.ico'];
 
 self.addEventListener('install', e => {
@@ -9,7 +9,9 @@ self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  if (url.searchParams.has('v')) return;   // the app's update check: always ask the network
   const isPage = e.request.mode === 'navigate' || e.request.destination === 'document';
   if (isPage){
     // The app itself: try the network first so updates show on the first load; fall back to the saved copy offline

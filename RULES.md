@@ -167,10 +167,24 @@ New runners get easier versions of the quality days. When marathon long runs car
 - After a move, back-to-back hard days and strength the day before the long run are flagged.
 - Changes are saved by date and carry into calendar, Excel, watch files, and Intervals.icu.
 
+### After the race
+
+- Enter your finish time and it becomes your new benchmark.
+- Recovery before hard training: 5K, 3–5 easy days; 10K, about a week; half marathon, 1–2 weeks; marathon, 3–4 weeks.
+- The next-plan options lead with a different distance, since training in seasons and mixing distances helps people stay fresh and keep coming back. Choosing another marathon right away is allowed, with a note that back-to-back marathon builds raise the risk of injury and burnout.
+- The new plan starts after recovery, from about 70% of your peak volume.
+
 ### Missed training
 
 - A few days: carry on. About a week: carry on, swap in the missed week's most important session (long run > quality > tempo), and don't add the missed miles. Sick, hurt, or 2+ weeks: step back before stepping up.
 - Push back: plan-length plans shift later; race-date plans rebuild from next week at a lower volume, keeping the full taper.
+
+### Race week
+
+- A race-week guide covers fueling, pacing, what to wear, and race-day logistics.
+- Carb loading for the marathon: about 10–12 g of carbs per kg of body weight a day for the last 36–48 hours, mostly by swapping fat, fiber, and protein for carbs rather than eating more. For a half, a carb-focused last day or so; for a 5K or 10K, a normal carb-based dinner.
+- In-race fueling: 30–60 g of carbs an hour by default, and up to about 90 g only if you've practiced it.
+- Pacing: target pace (your goal, or the middle of your projected range when the goal is a big stretch) with even-pace splits for a flat course, a slightly slower first mile or two, and links to course-specific pace tools.
 
 ## 7. What about uploaded and multisport plans?
 
@@ -247,4 +261,5 @@ The app explains workout terms in plain words inside every plan (Whole plan → 
 - Strength and running economy: [Heavy resistance vs plyometric training, Sports Medicine – Open (2022)](https://pmc.ncbi.nlm.nih.gov/articles/PMC9653533/); [Strength training methods and running economy, Sports Medicine (2024)](https://link.springer.com/article/10.1007/s40279-023-01978-y); [Strength training for distance runners, Sports Medicine (2018)](https://link.springer.com/article/10.1007/s40279-017-0835-7)
 - Heat: [How much does heat slow your race pace, Outside](https://www.outsideonline.com/health/running/racing/race-strategy/how-much-does-heat-slow-your-race-pace/); [Heat and running speed, Marathon Handbook](https://marathonhandbook.com/heres-how-much-the-heat-it-affects-your-running-speed/); [Heat acclimation for endurance performance, Sports Medicine](https://pubmed.ncbi.nlm.nih.gov/25380791/)
 - Single-run spikes and injury: [Frandsen et al., "How much running is too much?", British Journal of Sports Medicine (2025)](https://pmc.ncbi.nlm.nih.gov/articles/PMC12421110/)
+- Carbohydrate loading and race fueling: ["Nutrition strategies for the marathon: fuel for training and racing," Sports Medicine (2007)](https://pubmed.ncbi.nlm.nih.gov/17465604/); [review of carbohydrate guidelines for endurance athletes, Sports Medicine (2022)](https://link.springer.com/10.1007/s40279-022-01757-1)
 - Race-time equivalents: Peter Riegel, "Athletic Records and Human Endurance," *American Scientist* (1981)

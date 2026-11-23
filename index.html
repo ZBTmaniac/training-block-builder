@@ -198,7 +198,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.11.1';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.12.0';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -210,7 +210,7 @@ const DEFAULTS = {
   expert:false, ackTough:false,
   lthr:'', lthrSource:'test', effort:'pace',
   mode:'gen', custom:null,
-  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false, tuneStyle:'steady', tuneCap:70, tuneOpen:false, swaps:[], eased:[]
+  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false, tuneStyle:'steady', tuneCap:70, tuneOpen:false, swaps:[], eased:[], checkins:[]
 };
 let A = load();
 let idx = 0;
@@ -745,7 +745,14 @@ function weekLayout(){
 }
 
 // ---------- paces and effort ----------
+// Latest check-in result (optionally only ones matching a test)
+function lastCheck(test = () => true){
+  const c = (A.checkins || []).filter(test).sort((a, b) => a.date < b.date ? 1 : -1);
+  return c[0] || null;
+}
 function benchT5k(){
+  const ck = lastCheck(c => c.t5k);
+  if (ck) return ck.t5k;
   if (A.benchKind === 'none' || !secs(A.benchTime)) return null;
   return secs(A.benchTime) * Math.pow(3.107 / DIST_MI[A.benchDist], 1.06);
 }
@@ -767,7 +774,7 @@ function fmtPace(sPerMi){
 let Z = null;   // set per plan build
 // Heart-rate targets as % of threshold HR. Short, fast reps have none: HR lags behind the effort.
 const HR_PCT = {E:[0, 0.89], steady:[0.87, 0.91], MP:[0.89, 0.93], HM:[0.93, 0.97], T:[0.95, 1.0], '10K':[0.99, 1.02], '5K':null, R:null};
-function lthrVal(){ const v = +A.lthr; return A.lthr !== '' && v > 0 ? v : 0; }
+function lthrVal(){ const ck = lastCheck(c => c.lthr && !c.hot); if (ck) return ck.lthr; const v = +A.lthr; return A.lthr !== '' && v > 0 ? v : 0; }
 function hrText(key){
   const l = lthrVal(); if (!l) return '';
   const k = key === 'race' ? {'5K':'5K', '10K':'10K', 'Half':'HM', 'Full':'MP'}[A.distance] : key;
@@ -811,6 +818,12 @@ function workoutSteps(d, phase, f, k, pace){
     case 'R': return ['Slower than easy. Skip it if you feel beat up.'];
     case 'MLR': return ['Easy the whole way ' + eff('E')].concat(long ? [fuel] : []);
     case 'SH': return ['15–20 min very easy', '4 × 20 s strides'];
+    case 'CHK': return ['Warm up: 15 min easy, then 4 strides',
+      'Run 30 minutes as hard as you can hold evenly, on your own (not with a group). Press lap at 10 minutes.',
+      'Afterward, note the distance you covered and your average heart rate for the last 20 minutes',
+      'Cool down: 10 min easy',
+      'Pick a cool part of the day if you can. Heat pushes heart rate up and pace down, which skews the result.'].concat(
+      D === 'Half' || D === 'Full' ? [`Or race a ${D === 'Full' ? '10K or half marathon' : '10K'} this week instead and enter that result. A 10K or longer race works for threshold HR too; a 5K runs high.`] : ['Or race a 5K or 10K this week instead and enter that time.']);
     case 'TT': return [WU, `Run ${D === 'Full' ? 'a hard 10K' : D === 'Half' ? 'a hard 10K' : 'your ' + D} as a time trial, or at goal effort`, 'Cool down: 10 min easy'];
     case 'RACE': return ['Start a touch slower than goal pace for the first mile', 'Settle in ' + at('race')].concat(D === 'Full' || D === 'Half' ? ['Fuel the way you practiced: carbs every 30–45 min'] : ['Hold back for the first half, then race the second']);
     case 'Q': {
@@ -883,6 +896,7 @@ function workoutStruct(d, phase, f, k, pace){
     case 'R': return [easyAll('Recovery, slower than easy')];
     case 'MLR': return [easyAll('Medium-long, easy')];
     case 'SH': return [T(1050, 'E', 'active', 'Very easy'), strides(4)];
+    case 'CHK': return [T(900, 'E', 'warmup', 'Warm up'), strides(4), T(600, null, 'active', 'Time trial: first 10 min'), T(1200, null, 'active', 'Time trial: last 20 min'), T(600, 'E', 'cooldown', 'Cool down')];
     case 'TT': return [WU, M((D === 'Full' || D === 'Half' ? 6.214 : DIST_MI[D]) * MI_M, 'race', 'active', 'Time trial'), T(600, 'E', 'cooldown', 'Cool down')];
     case 'RACE': return [MI(DIST_MI[D], 'race', 'active', 'Race')];
     case 'Q': {
@@ -1045,6 +1059,8 @@ function liftSteps(t, phase, f, cut){
 function goalCheck(N){
   const t5 = benchT5k(), g = secs(A.goalTime);
   if (!t5 || !g) return null;
+  const ck = lastCheck(c => c.t5k);
+  if (ck && A.startDate) N = Math.max(1, N - Math.floor((parseDate(ck.date) - parseDate(A.startDate)) / (7 * 864e5)) - 1);   // weeks left after the check-in
   const proj = t5 * Math.pow(DIST_MI[A.distance] / 3.107, 1.06);
   const r = {new:[0.05, 0.10], some:[0.03, 0.06], regular:[0.01, 0.03]}[A.experience];
   // Up to 12 weeks scales linearly; longer plans allow up to 1.5x the range at 24 weeks, with lower confidence
@@ -1053,6 +1069,7 @@ function goalCheck(N){
   const tier = g >= fast ? 'on' : g >= fast * 0.95 ? 'amb' : 'big';
   return {fast, slow, goal: g, tier, weeks: N, longPlan: N > 12, ambCut: fast * 0.95};
 }
+function fmtDayShort(isoStr){ return parseDate(isoStr).toLocaleDateString(undefined, {month:'short', day:'numeric'}); }
 function fmtSecs(x){
   x = Math.round(x); const h = Math.floor(x / 3600), m = Math.floor(x % 3600 / 60), s = x % 60;
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
@@ -1279,6 +1296,25 @@ function buildPlan(){
     const total = days.reduce((s, d) => s + (d.role === 'RACE' ? 0 : d.miles), 0);
     return {phase, days, total, cut: !!(ramp.cut && ramp.cut[w]), capHit: phase !== 'taper' && (al.over > 0.5 || longMi >= capMiAll - 0.05)};
   });
+  // Check-ins: plans of 10+ weeks get a time trial (or tune-up race) every ~8 weeks, preferring cutback weeks,
+  // never in the last 3 weeks. Results update paces, threshold HR, and the goal check.
+  if (weeks.length >= 10){
+    const ok = w => w >= 5 && w < weeks.length - 3 && !['taper'].includes(weeks[w].phase);
+    const chk = [];
+    let w = 5;
+    while (w < weeks.length - 3){
+      let pick = -1;
+      for (let j = w; j <= Math.min(w + 2, weeks.length - 4); j++) if (ok(j) && weeks[j].cut){ pick = j; break; }
+      if (pick < 0 && ok(w)) pick = w;
+      if (pick < 0) break;
+      chk.push(pick); w = pick + 8;
+    }
+    chk.forEach(wi => {
+      const d = weeks[wi].days.find(x => x.role === 'Q');
+      if (d){ d.kind = 'CHK'; d.title = 'Check-in: time trial'; d.hint = 'A quick test to see where your fitness is. Enter your result afterward and the plan updates your paces' + (A.effort === 'hr' || lthrVal() ? ', heart-rate zones,' : '') + ' and goal check.'; }
+    });
+    notes.checkins = chk.map(x => x + 1);
+  }
   // Fill in workouts: progress (0..1) through each phase drives rep counts
   const pCount = {}, pSeen = {};
   phases.forEach(p => pCount[p] = (pCount[p] || 0) + 1);
@@ -1331,6 +1367,7 @@ function noteList(){
     return out;
   }
   if (A.expert) return ['Expert mode is on: volume, distance, and time safety checks are off.'];
+  if (N.checkins && N.checkins.length) out.push(`Check-in time trials in week${N.checkins.length > 1 ? 's' : ''} ${N.checkins.join(' and ')} keep your paces honest. Enter the result on that day and the plan updates your paces${lthrVal() || A.effort === 'hr' ? ', heart-rate zones,' : ''} and goal check. Fitness changes, and so does the weather: a test in summer heat makes threshold HR look higher than it is in cool weather.`);
   if (N.rwOnly) out.push(`This plan gets you running: run-walk sessions three times a week that build ${N.rwDone ? 'to 30 minutes of running without stopping' : 'as far as your timeline allows, faster than ideal'}. ${A.timeline === 'race' ? 'You can absolutely race with walk breaks, and lots of people do.' : ''}`);
   if (N.rwThen) out.push(`Weeks 1–${N.rwThen.rwWeeks} get you running 30 minutes without stopping. From week ${N.rwThen.regWeek} it becomes a regular ${A.distance} plan, so read Running words before then.`);
   if (needsRunWalk()) out.push('Run-walk weeks have three runs with a rest day between each; other days are rest or an optional walk while your legs adapt.' + (+A.strength ? ' Strength starts with one light session a week for the first month.' : ''));
@@ -1401,6 +1438,7 @@ function drawPlan(){
       <div class="daybody">
         ${items.length ? items.map(it => `<div class="item ${it.cls}"><h3>${esc(it.title)}${it.sub && it.sport !== 'Strength' ? ' · ' + esc(it.sub) : ''}</h3>${it.hint ? `<p>${esc(it.hint)}</p>` : ''}${stepList(it.steps)}</div>`).join('')
           : `<div class="item"><p>${esc(d.hint || HINT.off)}</p></div>`}
+        ${d.kind === 'CHK' ? checkinHTML(d) : ''}
         ${dayEditHTML(d, i)}
       </div></details>`;
   }).join('');
@@ -1466,7 +1504,7 @@ function drawPlan(){
   $('xics').onclick = exportICS; $('xpdf').onclick = exportPDF; $('xxlsx').onclick = exportXLSX;
   $('missed').onclick = missedClick;
   if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
-  if (!$('plan').dataset.tuneBound){ $('plan').addEventListener('click', tuneClick); $('plan').addEventListener('click', editClick); $('plan').addEventListener('change', editChange); $('plan').dataset.tuneBound = '1'; }
+  if (!$('plan').dataset.tuneBound){ $('plan').addEventListener('click', tuneClick); $('plan').addEventListener('click', editClick); $('plan').addEventListener('click', checkinClick); $('plan').addEventListener('change', editChange); $('plan').dataset.tuneBound = '1'; }
   $('plan').querySelectorAll('[data-week]').forEach(b => b.onclick = () => { wk = +b.dataset.week; ptab = 'week'; drawPlan(); window.scrollTo(0, 0); });
   $('plan').querySelectorAll('a[href="#gloss"]').forEach(a => a.onclick = e => { e.preventDefault(); setTab('plan'); const g = $('gloss'); g.open = true; g.scrollIntoView({block:'start'}); });
   syncTabs();
@@ -1522,6 +1560,62 @@ function applyEdits(plan){
   }));
   return plan;
 }
+function checkinHTML(d){
+  const k = iso(d.date), got = (A.checkins || []).find(c => c.date === k);
+  if (got) return `<div class="dayedit"><p style="margin:0 0 6px"><b>Your result:</b> ${esc(got.label)}${got.lthr ? `, threshold HR ${got.lthr} bpm${got.hot ? ' (hot day: HR not used)' : ''}` : ''}.</p>
+    <p class="quiet" style="margin:0 0 8px">${esc(got.effect || '')}</p>
+    <div class="planbtns"><button data-ckdel="${k}">Remove this result</button></div></div>`;
+  const u = A.units, D = A.distance;
+  const races = ['5K', '10K'].concat(D === 'Half' || D === 'Full' ? ['Half'] : []);
+  return `<div class="dayedit" data-ckform="${k}"><p style="margin:0 0 8px"><b>Enter your result</b></p>
+    <div class="choices two" style="margin-bottom:8px">
+      <button type="button" class="choice" data-ckmode="tt" aria-pressed="${CKMODE !== 'race'}"><b>30-min time trial</b></button>
+      <button type="button" class="choice" data-ckmode="race" aria-pressed="${CKMODE === 'race'}"><b>A race</b></button></div>
+    ${CKMODE === 'race'
+      ? `<label class="field">Race <select data-ck="dist">${races.map(r => `<option>${r}</option>`).join('')}</select></label>
+         <label class="field">Time (h:mm:ss) <input data-ck="time" inputmode="numeric" placeholder="e.g. 47:30"></label>`
+      : `<label class="field">Distance covered (${u}) <input data-ck="tt" type="number" step="0.01" inputmode="decimal" placeholder="${u === 'km' ? 'e.g. 6.8' : 'e.g. 4.2'}"></label>`}
+    <label class="field">Average HR, last 20 min <input data-ck="hr" type="number" inputmode="numeric" placeholder="optional"></label>
+    <label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:15px"><input type="checkbox" data-ck="hot"> It was hot (above about 75°F / 24°C)</label>
+    <p class="err" data-ckerr style="margin:4px 0"></p>
+    <div class="planbtns"><button data-cksave="${k}">Save and update my plan</button></div></div>`;
+}
+let CKMODE = 'tt';
+function parseHMS(t){ const p = String(t).trim().split(':').map(Number); if (p.some(isNaN) || !p.length) return 0; return p.reduce((a, b) => a * 60 + b, 0) * (p.length === 1 ? 60 : 1); }
+function checkinClick(e){
+  const mode = e.target.closest('[data-ckmode]');
+  if (mode){ CKMODE = mode.dataset.ckmode; const det = mode.closest('details.day'); drawPlan(); if (det && $(det.id)) $(det.id).open = true; return; }
+  const del = e.target.closest('[data-ckdel]');
+  if (del){ A.checkins = (A.checkins || []).filter(c => c.date !== del.dataset.ckdel); reEdit(del.closest('details.day')); return; }
+  const sv = e.target.closest('[data-cksave]'); if (!sv) return;
+  const f = sv.closest('[data-ckform]'), q = n => f.querySelector(`[data-ck="${n}"]`), err = t => { f.querySelector('[data-ckerr]').textContent = t; };
+  let t5k = 0, label = '', long = false;
+  if (CKMODE === 'race'){
+    const dist = q('dist').value, t = parseHMS(q('time').value);
+    if (!t) return err('Enter your race time, like 47:30 or 1:42:10.');
+    t5k = t * Math.pow(3.107 / DIST_MI[dist], 1.06); label = `${dist} race in ${fmtSecs(t)}`; long = dist !== '5K';
+  } else {
+    const v = +q('tt').value, mi = A.units === 'km' ? v / KM : v;
+    if (!(mi >= 2 && mi <= 7.5)) return err(`Enter the distance you covered in 30 minutes, in ${A.units}.`);
+    t5k = 1800 * Math.pow(3.107 / mi, 1.06); label = `${q('tt').value} ${A.units} in 30 minutes`; long = true;
+  }
+  const hr = +q('hr').value, hot = q('hot').checked;
+  if (q('hr').value && !(hr >= 120 && hr <= 210)) return err('Average HR is usually between 120 and 210 bpm. Check it, or leave it blank.');
+  const before = paceZones(), beforeG = P.goal;
+  const ck = {date: f.dataset.ckform, t5k, label, hot, ...(hr && long ? {lthr: Math.round(hr)} : {})};
+  A.checkins = (A.checkins || []).filter(c => c.date !== ck.date).concat([ck]);
+  const after = paceZones(), afterG = goalCheck(planWeeks());
+  const bits = [];
+  if (before && after) bits.push(`Easy pace ${fmtPace(before.E)} → ${fmtPace(after.E)}, threshold ${fmtPace(before.T)} → ${fmtPace(after.T)}.`);
+  else if (after) bits.push(`Training paces are set from this result: easy ${fmtPace(after.E)}, threshold ${fmtPace(after.T)}.`);
+  if (hr && !long) bits.push('A 5K runs too hot for threshold HR, so your HR zones stay as they were.');
+  if (hr && long && hot) bits.push('Hot-day HR runs high, so your HR zones stay as they were. Retest when it cools down.');
+  else if (hr && long) bits.push(`Threshold HR set to ${Math.round(hr)} bpm.`);
+  if (afterG) bits.push(`Goal check: ${GOAL_LABEL[afterG.tier]}${beforeG && beforeG.tier !== afterG.tier ? ` (was ${GOAL_LABEL[beforeG.tier]})` : ''}.`);
+  if (hot) bits.push('Paces from a hot test run slow. If workouts start to feel easy, retest on a cooler day.');
+  ck.effect = bits.join(' ');
+  reEdit(sv.closest('details.day'));
+}
 function dayEditHTML(d, i){
   const W = P.weeks[wk];
   const k = iso(d.date);
@@ -1566,7 +1660,8 @@ function goalCard(){
     big:'Your goal is well beyond your projected range. Race-pace workouts use your projected pace instead, so the plan stays safe. Re-test partway through and update your benchmark if you\'re ahead of schedule.'
   }[g.tier];
   const caveat = [A.benchKind === 'aspire' ? 'Your benchmark is a best guess, so this is too. A time trial in week 3 or 4 will sharpen it.' : '',
-    A.distance === 'Full' ? 'Marathon projections from shorter races run optimistic, especially for newer marathoners.' : '', goalConfNote(g)].filter(Boolean).join(' ');
+    A.distance === 'Full' ? 'Marathon projections from shorter races run optimistic, especially for newer marathoners.' : '', goalConfNote(g),
+    lastCheck(c => c.t5k) ? `Updated from your check-in on ${fmtDayShort(lastCheck(c => c.t5k).date)}.` : ''].filter(Boolean).join(' ');
   return `<div class="card goal goal-${g.tier}" style="margin-top:16px"><h3>Goal check: ${label}</h3>
     <p style="margin:0 0 6px;font-size:15px">Projected race-day range: <b>${fmtSecs(g.fast)}–${fmtSecs(g.slow)}</b>. Your goal: <b>${fmtSecs(g.goal)}</b>.</p>
     <p style="margin:0;font-size:15px">${msg}</p>${caveat ? `<p class="quiet" style="margin:8px 0 0">${caveat}</p>` : ''}</div>`;
@@ -1586,7 +1681,8 @@ function plainStep(t){ return PLAIN.reduce((x, [re, to]) => x.replace(re, to), t
 const RULES_URL = 'https://github.com/ZBTmaniac/training-block-builder/blob/main/RULES.md';
 const GOAL_LABEL = {on:'On track', amb:'Ambitious', big:'Big stretch'};
 function goalConfNote(g){
-  return g.longPlan ? `Projections past 12 weeks are less certain. This ${g.weeks}-week estimate assumes steady progress, so re-test partway through.` : '';
+  const ck = P && P.notes && P.notes.checkins && P.notes.checkins.length ? ` Your check-in${P.notes.checkins.length > 1 ? 's' : ''} in week${P.notes.checkins.length > 1 ? 's' : ''} ${P.notes.checkins.join(' and ')} will update it.` : ' Re-test partway through.';
+  return g.longPlan ? `Projections past 12 weeks are less certain. This ${g.weeks}-week estimate assumes steady progress.${ck}` : '';
 }
 // Live goal check on the benchmark screen, same formula as the plan's goal card
 function goalLive(){

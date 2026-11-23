@@ -24,6 +24,12 @@
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
+/* Color-blind friendly palette (Okabe-Ito); every color also has a text label */
+:root{--race:var(--lift)}
+html[data-palette="cb"]{--run:#0072B2; --bike:#009E73; --swim:#56B4E9; --lift:#E69F00; --rest:#8C8C8C; --race:#D55E00}
+@media (prefers-color-scheme: dark){
+  html[data-palette="cb"]{--run:#4FA3E0; --bike:#2FC29A; --swim:#9DD8F7; --lift:#F2B63C; --rest:#8C8C8C; --race:#F07A3A}
+}
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#151A1D; --surface:#1E2529; --ink:#E4E8E3; --muted:#9AA49F; --line:#313A3F;
@@ -70,6 +76,8 @@ label.field input,label.field select{font-size:16px;background:var(--bg);border:
 
 .flag{border-left:3px solid var(--lift);padding:2px 0 2px 12px;margin:12px 0 0;font-size:14px}
 .flag b{color:var(--lift)}
+@media (prefers-color-scheme: light){.flag b{color:#8A5410}}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .err{color:#B3261E;font-size:14px;margin:10px 0 0;min-height:1em}
 @media (prefers-color-scheme: dark){.err{color:#F2B8B5}}
 
@@ -117,7 +125,7 @@ label.field input,label.field select{font-size:16px;background:var(--bg);border:
 .strip a.is-today{color:var(--ink);font-weight:700}
 .bars{display:flex;align-items:flex-end;gap:3px;height:44px}
 .bar-run{width:7px;border-radius:2px;background:var(--run)}
-.bar-run.race{background:var(--lift)}
+.bar-run.race{background:var(--race)}
 .bar-run.bike{background:var(--bike)} .bar-run.swim{background:var(--swim)} .bar-run.other{background:var(--rest)}
 .bar-lift{width:7px;height:10px;border-radius:2px;background:var(--lift)}
 .bar-rest{background:var(--rest);height:4px;width:4px;border-radius:2px}
@@ -188,10 +196,10 @@ details.day summary::-webkit-details-marker{display:none}
   </section>
   <section id="plan" hidden></section>
 </main>
-<nav class="tabbar" id="tabbar" role="tablist" aria-label="Plan sections" hidden><div>
-  <button role="tab" data-tab="week" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>This week</button>
-  <button role="tab" data-tab="plan" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>Whole plan</button>
-  <button role="tab" data-tab="take" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M5 12v6.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V12"/></svg>Export &amp; sync</button>
+<nav class="tabbar" id="tabbar" aria-label="Plan sections" hidden><div role="tablist" aria-label="Plan sections">
+  <button role="tab" id="tab-week" aria-controls="pane-week" data-tab="week" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>This week</button>
+  <button role="tab" id="tab-plan" aria-controls="pane-plan" data-tab="plan" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>Whole plan</button>
+  <button role="tab" id="tab-take" aria-controls="pane-take" data-tab="take" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M5 12v6.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V12"/></svg>Export &amp; sync</button>
 </div></nav>
 <div id="print"></div>
 <nav class="bar" id="quizbar"><div>
@@ -200,7 +208,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.12.2';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.13.0';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -212,7 +220,7 @@ const DEFAULTS = {
   expert:false, ackTough:false,
   lthr:'', lthrSource:'test', effort:'pace',
   mode:'gen', custom:null,
-  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false, tuneStyle:'steady', tuneCap:70, tuneOpen:false, swaps:[], eased:[], checkins:[], raceResult:null
+  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false, tuneStyle:'steady', tuneCap:70, tuneOpen:false, swaps:[], eased:[], checkins:[], raceResult:null, palette:'std'
 };
 let A = load();
 let idx = 0;
@@ -262,7 +270,7 @@ const SCREENS = [
     render: () => choices('distance', [
       {v:'5K', label:'5K', sub:'3.1 mi'}, {v:'10K', label:'10K', sub:'6.2 mi'},
       {v:'Half', label:'Half marathon', sub:'13.1 mi'}, {v:'Full', label:'Marathon', sub:'26.2 mi'}
-    ], 'two') + `<p class="quiet" style="margin:12px 0 0"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a></p><div class="card" style="margin-top:16px"><h3>Already have a plan?</h3>
+    ], 'two') + `<p class="quiet" style="margin:12px 0 0"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a> · <a href="https://github.com/ZBTmaniac/training-block-builder/issues/new?template=feedback.yml" target="_blank" rel="noopener">Send feedback</a></p><div class="card" style="margin-top:16px"><h3>Already have a plan?</h3>
       <p class="sub">Upload it from a spreadsheet and use this app to follow it, add strength, and export it.</p>
       <button type="button" class="choice" data-upload="1"><b>Upload my own plan</b><span>Excel or CSV</span></button></div>
       <div class="card"><h3>Moving to a new phone or browser?</h3>
@@ -279,7 +287,8 @@ const SCREENS = [
         {v:'new', label:'New to running', sub:'Little or no regular running yet'},
         {v:'some', label:"I've trained before", sub:'Done a plan or a few races'},
         {v:'regular', label:'I train regularly', sub:'Structured training most of the year'}
-      ])}</div>
+      ])}
+      <p class="quiet" style="margin:10px 0 0"><b>Why we ask:</b> experience sets how fast the plan builds and which options you see. If you're between two, pick the lower one; you can change it later.</p></div>
       <div class="card"><h3>Recent weekly volume</h3>
       <p class="sub">Your average over the last 4 weeks. 0 is fine.</p>
       <label class="field">Per week <input type="number" inputmode="decimal" min="0" data-field="volume" value="${esc(A.volume)}" placeholder="e.g. 15"></label>
@@ -324,13 +333,14 @@ const SCREENS = [
   },
   {
     title:'How fast are you now?',
-    lead:'A recent result sets your training paces. No recent race? Use a time you think you could run today, and the plan will check it with a time trial in week 3 or 4.',
+    lead:'A recent result sets your training paces. No recent race? Use a time you think you could run today. Plans of 10+ weeks include check-ins that update it.',
     render: () => `
       <div class="card"><h3>Your benchmark</h3>
       ${choices('benchKind', [{v:'race',label:'Recent result',sub:'Race or time trial'},{v:'aspire',label:'Best guess',sub:'Labeled aspirational'},{v:'none',label:'Skip',sub:'Train by feel'}])}
       ${A.benchKind!=='none' ? `<div style="margin-top:8px">
         <label class="field">Distance <select data-field="benchDist">${['1 mile','5K','10K','Half','Full'].map(d=>`<option ${A.benchDist===d?'selected':''}>${d}</option>`).join('')}</select></label>
         <label class="field">Time ${timeInputs('benchTime')}</label></div>` : ''}
+      <p class="quiet" style="margin:10px 0 0"><b>Why it matters:</b> real paces keep easy days easy and hard days on target. Guessing too fast is one of the most common ways a plan goes wrong, so use a recent result if you have one.</p>
       </div>
       <div class="card"><h3>Goal time <span class="quiet">(optional)</span></h3>
       <p class="sub">We'll tell you how it compares with where your fitness is likely to be on race day.</p>
@@ -363,7 +373,7 @@ const SCREENS = [
       <div class="card"><h3>Your week</h3>
       <label class="field">Long run day ${daySelect('longDay')}</label>
       <label class="field">Hard workout day ${daySelect('qualityDay')}</label>
-      <p class="quiet" style="margin:8px 0 0">Your hard workout can be on a track, road, or treadmill.</p></div>`,
+      <p class="quiet" style="margin:8px 0 0">Pick a long run day with time and no rush, often the weekend. Keep your hard workout at least a day away from it so you're fresh for both. Your hard workout can be on a track, road, or treadmill.</p></div>`,
     check: () => {
       if (!A.days) return 'Pick how many days you can run.';
       if (A.expert) return '';
@@ -378,13 +388,15 @@ const SCREENS = [
     lead:'Lifting protects joints, tendons, and bones, holds your form late in races, and builds the power that makes you faster. Any amount helps.',
     render: () => `
       <div class="card"><h3>Days per week</h3>
-      ${choices('strength', [{v:0,label:'None'},{v:1,label:'1'},{v:2,label:'2'},{v:3,label:'3'}], 'row')}</div>
+      ${choices('strength', [{v:0,label:'None'},{v:1,label:'1'},{v:2,label:'2'},{v:3,label:'3'}], 'row')}
+      <p class="quiet" style="margin:10px 0 0">1–2 days is plenty for most runners. Strength goes on your hard run days, so easy days stay easy.</p></div>
       ${+A.strength>0 || A.strength===null ? `<div class="card"><h3>What equipment do you have?</h3>
       ${choices('equipment', [
         {v:'bw', label:'Bodyweight', sub:'No equipment, or a backpack you can load'},
         {v:'db', label:'Dumbbells or kettlebells', sub:'At home or at the gym'},
         {v:'bb', label:'Barbell or full gym', sub:'Rack, bar, and plates'}
-      ])}</div>` : ''}
+      ])}
+      <p class="quiet" style="margin:10px 0 0">Pick what you can use most weeks. Heavier lifting does more for bones and running economy, but the lifting you'll actually do beats the one you won't.</p></div>` : ''}
       ${strengthNote()}`,
     check: () => {
       if (A.strength === null) return 'Pick how many strength days you want, or None.';
@@ -482,7 +494,7 @@ function render(){
   const s = SCREENS[idx];
   $('step').textContent = `Step ${idx+1} of ${SCREENS.length}`;
   $('progress').innerHTML = SCREENS.map((_,i) => `<i class="${i<=idx?'on':''}"></i>`).join('');
-  $('screen').innerHTML = `<h1>${s.title}</h1><p class="lead">${s.lead}</p>` + s.render();
+  $('screen').innerHTML = `<h1>${s.title}</h1><p class="lead">${s.lead}</p><h2 class="sr">Your answers</h2>` + s.render();
   $('err').textContent = '';
   $('back').hidden = idx === 0;
   $('next').textContent = idx === SCREENS.length-1 ? 'Build my plan' : 'Next';
@@ -1426,10 +1438,11 @@ function drawPlan(){
     const ld = loadOf(d), h = ld ? Math.max(8, Math.round(44 * ld / maxMi)) : 0;
     const isToday = +d.date === +today;
     const sc = d.role === 'RACE' ? 'race' : (SPORT_CLS[d.sport] || '');
-    return `<a href="#d${i}" class="${isToday ? 'is-today' : ''}"><span class="bars">
+    const lab = `${DAYS[(d.date.getDay() + 6) % 7]}: ${dayItems(d).map(it => it.sport === 'Strength' ? 'strength' : (it.title + (it.sub ? ', ' + it.sub : ''))).join(', ') || 'rest'}`;
+    return `<a href="#d${i}" class="${isToday ? 'is-today' : ''}"><span class="sr">${esc(lab)}</span><span class="bars" aria-hidden="true">
       ${ld ? `<span class="bar-run ${sc}" style="height:${h}px"></span>` : ''}
       ${d.lift ? '<span class="bar-lift"></span>' : ''}${!ld && !d.lift ? '<span class="bar-rest"></span>' : ''}
-      </span>${DAYS[(d.date.getDay() + 6) % 7].slice(0,2)}</a>`;
+      </span><span aria-hidden="true">${DAYS[(d.date.getDay() + 6) % 7].slice(0,2)}</span></a>`;
   }).join('');
   const cards = W.days.map((d, i) => {
     const isToday = +d.date === +today;
@@ -1440,7 +1453,7 @@ function drawPlan(){
     return `<details class="day ${isToday ? 'is-today' : ''}" id="d${i}" ${isToday ? 'open' : ''}>
       <summary><span class="dnum">${d.date.getDate()}</span>
         <span><span class="dn">${DAYS[(d.date.getDay() + 6) % 7]} · ${esc(head)}</span><br><span class="sumline">${esc(sum)}</span></span>
-        <span class="dots">${items.map(it => `<i class="dot ${it.cls}"></i>`).join('')}</span></summary>
+        <span class="dots" aria-hidden="true">${items.map(it => `<i class="dot ${it.cls}"></i>`).join('')}</span></summary>
       <div class="daybody">
         ${items.length ? items.map(it => `<div class="item ${it.cls}"><h3>${esc(it.title)}${it.sub && it.sport !== 'Strength' ? ' · ' + esc(it.sub) : ''}</h3>${it.hint ? `<p>${esc(it.hint)}</p>` : ''}${stepList(it.steps)}</div>`).join('')
           : `<div class="item"><p>${esc(d.hint || HINT.off)}</p></div>`}
@@ -1452,7 +1465,8 @@ function drawPlan(){
   const overview = P.weeks.map((w, i) => `<tr class="${i === wk ? 'cur' : ''}"><td><button data-week="${i}">Week ${i+1}</button></td><td>${PHASE_NAME[w.phase] || ''}</td><td>${w.sumText || fmtDist(w.total) + (P.custom ? ' run' : '')}</td></tr>`).join('');
   const sportsUsed = P.custom ? [...new Set(A.custom.sessions.map(x => SPORT_CLS[x.sport]).filter(c => ['run','bike','swim','lift','other'].includes(c)))] : null;
   $('plan').innerHTML = `
-    <div data-pane="week" ${ptab === 'week' ? '' : 'hidden'}>
+    <h1 class="sr">Your ${P.custom ? '' : esc(A.distance) + ' '}training plan</h1>
+    <div data-pane="week" id="pane-week" role="tabpanel" aria-labelledby="tab-week" ${ptab === 'week' ? '' : 'hidden'}>
     <p class="phase">${P.custom ? esc(planName()) : `${PHASE_NAME[W.phase]} phase · ${esc(A.distance)} plan`}</p>
     <div class="weekrow"><div>
       <p class="weekno">Week ${wk + 1}<small> / ${P.N}</small></p>
@@ -1464,13 +1478,14 @@ function drawPlan(){
     ${P.notes && P.notes.rwThen && wk >= P.notes.rwThen.rwWeeks - 1 && wk <= P.notes.rwThen.rwWeeks ? `<p class="flag"><b>${wk < P.notes.rwThen.rwWeeks ? 'Next week' : 'This week'} you start regular running workouts.</b> Read <a href="#gloss">Running words</a> (in Whole plan) first so the workouts make sense.</p>` : ''}
     <div class="strip">${strip}</div>
     <div class="legend">${sportsUsed ? sportsUsed.map(c => `<span class="l-${c}">${({run:'Run', bike:'Bike', swim:'Swim', lift:'Strength', other:'Cross-train'})[c]}</span>`).join('') : `<span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}`}</div>
+    <h2 class="sr">Days this week</h2>
     ${cards}
     ${W.days.some(d => d.role === 'RACE') && !P.custom ? raceGuideHTML() : ''}
     ${goalCard()}
     <div class="nexttabs"><button data-tab="plan"><b>Whole plan</b><span>All weeks, notes, adjust the build</span></button>
       <button data-tab="take"><b>Export &amp; sync</b><span>Calendar, PDF, Excel, watch</span></button></div>
     </div>
-    <div data-pane="plan" ${ptab === 'plan' ? '' : 'hidden'}>
+    <div data-pane="plan" id="pane-plan" role="tabpanel" aria-labelledby="tab-plan" ${ptab === 'plan' ? '' : 'hidden'}>
     <p class="phase">${P.custom ? esc(planName()) : `${esc(A.distance)} plan · ${P.N} weeks`}</p>
     <h2 class="tabhead">Whole plan</h2>
     ${notes.length ? `<details class="card notes" style="margin-top:16px"><summary>Notes on your plan (${notes.length})</summary>
@@ -1481,18 +1496,23 @@ function drawPlan(){
     <details class="card notes" open style="margin-top:16px"><summary>All weeks</summary><table class="overview">${overview}</table></details>
     ${A.timeline === 'race' && !P.custom && !P.weeks[wk].days.some(d => d.role === 'RACE') ? raceGuideHTML().replace('id="raceguide" open', 'id="raceguide"').replace('<summary>Race week guide</summary>', '<summary>Race week guide (preview)</summary>') : ''}
     <details class="card notes" id="gloss" style="margin-top:16px"><summary>Running words: what the workouts mean</summary>${glossaryHTML()}</details>
-    <div class="card" id="missed" style="margin-top:16px">${missedPanel()}</div>
+    <div class="card" id="missed" aria-live="polite" style="margin-top:16px">${missedPanel()}</div>
     ${P.custom ? `<div class="planbtns"><button id="reupload">Upload a different plan</button><button id="makegen">Build a plan for me</button></div>`
                : `<div class="planbtns"><button id="editans">Edit answers</button><button id="toupload">Upload my own</button></div>`}
-    <p class="quiet" style="margin:12px 0"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a> · Version ${APP_VERSION} · Not medical advice: listen to your body and adjust.</p>
+    <div class="card"><h3>Display</h3>
+      <p class="sub">Colors mark runs, strength, and other sessions. Every color also has a text label, and the PDF is text only.</p>
+      <div class="choices two" role="group" aria-label="Color palette">
+        <button type="button" class="choice" data-palette="std" aria-pressed="${A.palette !== 'cb'}"><b>Standard colors</b></button>
+        <button type="button" class="choice" data-palette="cb" aria-pressed="${A.palette === 'cb'}"><b>Color-blind friendly</b></button></div></div>
+    <p class="quiet" style="margin:12px 0"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a> · <a href="https://github.com/ZBTmaniac/training-block-builder/issues/new?template=feedback.yml" target="_blank" rel="noopener">Send feedback</a> · Version ${APP_VERSION} · Not medical advice: listen to your body and adjust.</p>
     </div>
-    <div data-pane="take" ${ptab === 'take' ? '' : 'hidden'}>
+    <div data-pane="take" id="pane-take" role="tabpanel" aria-labelledby="tab-take" ${ptab === 'take' ? '' : 'hidden'}>
     <p class="phase">${P.custom ? esc(planName()) : `${esc(A.distance)} plan · ${P.N} weeks`}</p>
     <h2 class="tabhead">Export &amp; sync</h2>
     <div class="card" style="margin-top:12px"><h3>Take your plan with you</h3>
       <div class="planbtns" style="margin-top:8px"><button id="xics">Calendar</button><button id="xpdf">PDF</button><button id="xxlsx">Excel</button></div>
       ${P.custom ? '' : `<div class="planbtns" style="margin-top:8px"><button id="xfit">Watch files (.fit)</button><button id="xzwo">TrainingPeaks/Zwift (.zwo)</button></div>`}
-      <p id="watchmsg" class="flag" hidden></p>
+      <p id="watchmsg" class="flag" role="status" hidden></p>
       <details style="margin-top:10px"><summary class="quiet" style="cursor:pointer">How do I save these on a phone?</summary>
         <ul class="quiet" style="margin:8px 0 0;padding-left:18px">
           <li><b>Excel and watch files</b> open your share sheet: choose Save to Files, or an app like Numbers or Google Sheets.</li>
@@ -1521,10 +1541,17 @@ function drawPlan(){
 }
 let ptab = 'week';
 function syncTabs(){
-  document.querySelectorAll('#tabbar [data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === ptab)));
+  document.querySelectorAll('#tabbar [data-tab]').forEach(b => { b.setAttribute('aria-selected', String(b.dataset.tab === ptab)); b.tabIndex = b.dataset.tab === ptab ? 0 : -1; });
   document.querySelectorAll('#plan [data-pane]').forEach(p => p.hidden = p.dataset.pane !== ptab);
 }
 function setTab(t){ if (!t || t === ptab) return; ptab = t; syncTabs(); window.scrollTo(0, 0); }
+// Arrow keys move between tabs, like a native tab bar
+document.addEventListener('keydown', e => {
+  const b = e.target.closest && e.target.closest('#tabbar [role="tab"]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const tabs = [...document.querySelectorAll('#tabbar [role="tab"]')], i = tabs.indexOf(b);
+  const j = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  setTab(tabs[j].dataset.tab); tabs[j].focus(); e.preventDefault();
+});
 document.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b && (b.closest('#tabbar') || b.closest('.nexttabs'))) setTab(b.dataset.tab); });
 // =====================================================================
 // DAY EDITS: move a session to another day in the same week, or ease a hard day.
@@ -1803,7 +1830,7 @@ function goalCard(){
     amb:'Your goal is a bit faster than your projected range. Possible with a great block and a good day.',
     big:'Your goal is well beyond your projected range. Race-pace workouts use your projected pace instead, so the plan stays safe. Re-test partway through and update your benchmark if you\'re ahead of schedule.'
   }[g.tier];
-  const caveat = [A.benchKind === 'aspire' ? 'Your benchmark is a best guess, so this is too. A time trial in week 3 or 4 will sharpen it.' : '',
+  const caveat = [A.benchKind === 'aspire' ? 'Your benchmark is a best guess, so this is too. A check-in time trial will sharpen it.' : '',
     A.distance === 'Full' ? 'Marathon projections from shorter races run optimistic, especially for newer marathoners.' : '', goalConfNote(g),
     lastCheck(c => c.t5k) ? `Updated from your check-in on ${fmtDayShort(lastCheck(c => c.t5k).date)}.` : ''].filter(Boolean).join(' ');
   return `<div class="card goal goal-${g.tier}" style="margin-top:16px"><h3>Goal check: ${label}</h3>
@@ -3188,7 +3215,7 @@ function keepCard(){
       <p class="quiet" style="margin:6px 0 0">Sends a link with your race, dates, days, and strength choices. Your fitness, goal time, heart rate, and check-ins stay private.</p>` : ''}
     ${!standalone() ? `<p class="flag" style="margin-top:10px"><b>Tip:</b> add this app to your Home Screen. Browsers can clear a website's saved data after a while without a visit; Home Screen apps keep it.</p>` : ''}
     <p class="quiet" style="margin:8px 0 0">${A.lastBackup ? `Last backup: ${fmtDayShort(A.lastBackup)}.` : 'No backup saved yet.'} Backups don't include your Intervals.icu API key.</p>
-    <p id="keepmsg" class="flag" hidden></p></div>`;
+    <p id="keepmsg" class="flag" role="status" hidden></p></div>`;
 }
 // Update check: compare the running version with the published one; back up first, then refresh
 let updateShown = false;
@@ -3224,6 +3251,9 @@ document.addEventListener('click', e => {
 // Ask the browser to keep this site's data (helps on browsers that clear unused sites)
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
+function applyPalette(){ document.documentElement.dataset.palette = A.palette === 'cb' ? 'cb' : 'std'; }
+applyPalette();
+document.addEventListener('click', e => { const b = e.target.closest('button[data-palette]'); if (!b) return; A.palette = b.dataset.palette; save(); applyPalette(); drawPlan(); });
 const SHARED = readSharedSetup();
 if (SHARED) openSharedSetup(SHARED); else if (A.built) showPlan(); else render();
 setTimeout(checkForUpdate, 4000);

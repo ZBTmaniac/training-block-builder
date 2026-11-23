@@ -1,0 +1,60 @@
+name: Feedback
+description: Tell us what worked, what didn't, or what you'd like to see.
+title: "Feedback: "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying Training Block Builder! Everything you write here is public, so please don't include personal details like your full name, health information, or your Intervals.icu API key.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of feedback is this?
+      options:
+        - Something didn't work
+        - Something was confusing
+        - An idea or request
+        - Something I liked
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Tell us about it
+      description: What happened, or what would you like? Screenshots help.
+    validations:
+      required: true
+  - type: dropdown
+    id: plan
+    attributes:
+      label: What were you training for?
+      options:
+        - 5K
+        - 10K
+        - Half marathon
+        - Marathon
+        - My own uploaded plan
+        - Not sure yet
+  - type: dropdown
+    id: experience
+    attributes:
+      label: Your running experience
+      options:
+        - New to running
+        - I've trained before
+        - I train regularly
+  - type: dropdown
+    id: device
+    attributes:
+      label: Where were you using it?
+      options:
+        - iPhone
+        - Android phone
+        - Tablet
+        - Computer
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown at the bottom of the Whole plan tab, like 0.13.0.

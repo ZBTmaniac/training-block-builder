@@ -6,19 +6,19 @@ The guiding principle: **flag, don't forbid.** When something looks risky or amb
 
 The rules follow the order a plan is built in:
 
-1. [What you tell it](#1-what-you-tell-it)
-2. [Where you're starting: experience](#2-where-youre-starting-experience)
-3. [What you're training for: the goal](#3-what-youre-training-for-the-goal)
-4. [How much time you have: the timeline](#4-how-much-time-you-have-the-timeline)
-5. [What fills each week](#5-what-fills-each-week)
-6. [When life changes the plan](#6-when-life-changes-the-plan)
-7. [Uploaded and multisport plans](#7-uploaded-and-multisport-plans)
+1. [What does it ask you?](#1-what-does-it-ask-you)
+2. [Where are you starting?](#2-where-are-you-starting)
+3. [What are you training for?](#3-what-are-you-training-for)
+4. [How much time do you have?](#4-how-much-time-do-you-have)
+5. [What fills each week?](#5-what-fills-each-week)
+6. [What happens when life gets in the way?](#6-what-happens-when-life-gets-in-the-way)
+7. [What about uploaded and multisport plans?](#7-what-about-uploaded-and-multisport-plans)
 8. [Glossary](#glossary)
 9. [References](#references)
 
 ---
 
-## 1. What you tell it
+## 1. What does it ask you?
 
 - **Goal:** race distance (5K, 10K, half, marathon) and an optional goal time.
 - **Experience:** new to running, trained before, or train regularly. For new runners and anyone below the plan's starting floor: how long you can run right now without stopping.
@@ -29,7 +29,7 @@ The rules follow the order a plan is built in:
 - **Strength:** days per week and equipment.
 - **Units:** miles or kilometers.
 
-## 2. Where you're starting: experience
+## 2. Where are you starting?
 
 Experience sets how plans start, how fast they build, and how many options you see.
 
@@ -51,7 +51,7 @@ Experience sets how plans start, how fast they build, and how many options you s
 - Running words (easy, effort scale, strides, tempo, intervals, float, long run, cutback, taper, run-walk) are explained in the plan. Reading them is required before the plan is built only when it continues past run-walk.
 - New runners get plain-language workouts (effort out of 10 instead of RPE, "pickups" instead of strides, minutes alongside distance) and lighter strength: one session a week for the first month, starting around 6 out of 10, technique first.
 
-## 3. What you're training for: the goal
+## 3. What are you training for?
 
 ### Distance changes the workouts, not the volume
 
@@ -72,7 +72,7 @@ Experience sets how plans start, how fast they build, and how many options you s
 
 The check shows live on the benchmark screen and again on the plan. Big-stretch goals use projected pace for race-pace workouts, so nobody does reps at a pace they can't hold.
 
-## 4. How much time you have: the timeline
+## 4. How much time do you have?
 
 ### Phases
 
@@ -96,7 +96,7 @@ The check shows live on the benchmark screen and again on the plan. Big-stretch 
 - If you already run more than your days and limits can hold, weekday runs go up to 90 minutes so the plan doesn't cut your volume.
 - Marathon plans stop for a "know what you're signing up for" page only when the peak lands more than about 15% under the usual peak **and** a different choice of days, weeks or weekday limit would fix it. When pace is the limit (even 6 days can't fit the usual mileage), the plan is built around time on your feet and says so in a note instead.
 
-## 5. What fills each week
+## 5. What fills each week?
 
 ### Two rules at every level
 
@@ -151,7 +151,7 @@ New runners get easier versions of the quality days. When marathon long runs car
 - Expected slowdown is estimated at roughly 4–4.5 seconds per mile for each °C above about 15°C (59°F) for mid-pack marathoners, scaled down for shorter races. Most heat adaptation happens within 7–14 days.
 - Overdressing to simulate heat isn't recommended.
 
-## 6. When life changes the plan
+## 6. What happens when life gets in the way?
 
 ### Moving or easing a day
 
@@ -165,7 +165,7 @@ New runners get easier versions of the quality days. When marathon long runs car
 - A few days: carry on. About a week: carry on, swap in the missed week's most important session (long run > quality > tempo), and don't add the missed miles. Sick, hurt or 2+ weeks: step back before stepping up.
 - Push back: plan-length plans shift later; race-date plans rebuild from next week at a lower volume, keeping the full taper.
 
-## 7. Uploaded and multisport plans
+## 7. What about uploaded and multisport plans?
 
 - Two sessions a day at most; a brick counts as one.
 - Two hard endurance sessions on one day are flagged unless it's a brick.

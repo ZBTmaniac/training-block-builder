@@ -95,6 +95,8 @@ label.field input,label.field select{font-size:16px;background:var(--bg);border:
 .tabhead{font-family:var(--display);font-weight:700;font-size:32px;line-height:1;margin:6px 0 4px}
 .nexttabs{display:flex;gap:10px;margin:20px 0 0}
 .nexttabs button{flex:1;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;cursor:pointer}
+.dayedit{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.dayedit select{margin-left:8px}
 .nexttabs b{display:block}.nexttabs span{font-size:13px;color:var(--muted)}
 .quiet{font-size:13px;color:var(--muted)}
 
@@ -196,7 +198,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.10.1';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.11.0';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -208,7 +210,7 @@ const DEFAULTS = {
   expert:false, ackTough:false,
   lthr:'', lthrSource:'test', effort:'pace',
   mode:'gen', custom:null,
-  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false, tuneStyle:'steady', tuneCap:70, tuneOpen:false
+  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false, tuneStyle:'steady', tuneCap:70, tuneOpen:false, swaps:[], eased:[]
 };
 let A = load();
 let idx = 0;
@@ -1305,7 +1307,7 @@ function buildPlan(){
 // ---------- plan view ----------
 let P = null, wk = 0;
 function showPlan(){
-  P = A.mode === 'upload' && A.custom ? buildCustomPlan() : buildPlanAll();
+  P = applyEdits(A.mode === 'upload' && A.custom ? buildCustomPlan() : buildPlanAll());
   $('quiz').hidden = true; $('quizbar').hidden = true; $('plan').hidden = false; $('tabbar').hidden = false; ptab = 'week';
   const today = new Date(); today.setHours(0,0,0,0);
   const off = Math.floor((today - parseDate(A.startDate)) / (7 * 864e5));
@@ -1389,7 +1391,8 @@ function drawPlan(){
   const cards = W.days.map((d, i) => {
     const isToday = +d.date === +today;
     const items = dayItems(d);
-    const sum = items.length ? items.map(it => it.sport === 'Strength' ? 'Strength' : (it.sub || it.sport)).join(' · ') : 'Rest day';
+    const sum = (items.length ? items.map(it => it.sport === 'Strength' ? 'Strength' : (it.sub || it.sport)).join(' · ') : 'Rest day')
+      + (d.eased ? ' · eased' : '') + (items.length && d.movedFrom && +d.movedFrom !== +d.date ? ` · moved from ${DAYS[(d.movedFrom.getDay() + 6) % 7].slice(0, 3)}` : '') + (d.warn ? ' · ⚠︎' : '');
     const head = items.length ? items.filter(it => it.sport !== 'Strength' && !(it.x && it.x.optional)).map(it => it.title).join(' + ') || items[0].title : 'Rest';
     return `<details class="day ${isToday ? 'is-today' : ''}" id="d${i}" ${isToday ? 'open' : ''}>
       <summary><span class="dnum">${d.date.getDate()}</span>
@@ -1398,6 +1401,7 @@ function drawPlan(){
       <div class="daybody">
         ${items.length ? items.map(it => `<div class="item ${it.cls}"><h3>${esc(it.title)}${it.sub && it.sport !== 'Strength' ? ' · ' + esc(it.sub) : ''}</h3>${it.hint ? `<p>${esc(it.hint)}</p>` : ''}${stepList(it.steps)}</div>`).join('')
           : `<div class="item"><p>${esc(d.hint || HINT.off)}</p></div>`}
+        ${dayEditHTML(d, i)}
       </div></details>`;
   }).join('');
   const overview = P.weeks.map((w, i) => `<tr class="${i === wk ? 'cur' : ''}"><td><button data-week="${i}">Week ${i+1}</button></td><td>${PHASE_NAME[w.phase] || ''}</td><td>${w.sumText || fmtDist(w.total) + (P.custom ? ' run' : '')}</td></tr>`).join('');
@@ -1452,7 +1456,7 @@ function drawPlan(){
   $('pprev').onclick = () => { if (wk > 0){ wk--; drawPlan(); } };
   $('pnext').onclick = () => { if (wk < P.N - 1){ wk++; drawPlan(); } };
   if ($('editans')) $('editans').onclick = () => showQuiz();
-  if ($('rwrepeat')) $('rwrepeat').onclick = () => { A.rwRepeats = [...new Set([...(A.rwRepeats || []), wk])]; save(); P = buildPlanAll(); drawPlan(); };
+  if ($('rwrepeat')) $('rwrepeat').onclick = () => { A.rwRepeats = [...new Set([...(A.rwRepeats || []), wk])]; save(); P = applyEdits(buildPlanAll()); drawPlan(); };
   if ($('toupload')) $('toupload').onclick = () => showQuiz('upload');
   if ($('reupload')) $('reupload').onclick = () => showQuiz('upload');
   if ($('makegen')) $('makegen').onclick = () => showQuiz('gen');
@@ -1462,7 +1466,7 @@ function drawPlan(){
   $('xics').onclick = exportICS; $('xpdf').onclick = exportPDF; $('xxlsx').onclick = exportXLSX;
   $('missed').onclick = missedClick;
   if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
-  if (!$('plan').dataset.tuneBound){ $('plan').addEventListener('click', tuneClick); $('plan').dataset.tuneBound = '1'; }
+  if (!$('plan').dataset.tuneBound){ $('plan').addEventListener('click', tuneClick); $('plan').addEventListener('click', editClick); $('plan').addEventListener('change', editChange); $('plan').dataset.tuneBound = '1'; }
   $('plan').querySelectorAll('[data-week]').forEach(b => b.onclick = () => { wk = +b.dataset.week; ptab = 'week'; drawPlan(); window.scrollTo(0, 0); });
   $('plan').querySelectorAll('a[href="#gloss"]').forEach(a => a.onclick = e => { e.preventDefault(); setTab('plan'); const g = $('gloss'); g.open = true; g.scrollIntoView({block:'start'}); });
   syncTabs();
@@ -1474,6 +1478,82 @@ function syncTabs(){
 }
 function setTab(t){ if (!t || t === ptab) return; ptab = t; syncTabs(); window.scrollTo(0, 0); }
 document.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b && (b.closest('#tabbar') || b.closest('.nexttabs'))) setTab(b.dataset.tab); });
+// =====================================================================
+// DAY EDITS: move a session to another day in the same week, or ease a hard day.
+// Stored by date, applied on top of the built plan, so exports and Intervals follow them.
+// =====================================================================
+const HARD_ROLES = ['Q', 'T', 'L', 'RACE'];
+const dayHard = d => d.items ? d.items.some(it => it.x && /hard|tempo|interval|threshold|race|long/i.test((it.x.intensity || '') + ' ' + (it.x.type || ''))) : HARD_ROLES.includes(d.role);
+const canEase = d => !d.eased && (d.items ? dayHard(d) && d.items.some(it => it.sport === 'Run') : ['Q', 'T'].includes(d.role) && d.kind !== 'TT');
+function applyEdits(plan){
+  if (!plan || !plan.weeks) return plan;
+  const byDate = {};
+  plan.weeks.forEach(W => W.days.forEach(d => byDate[iso(d.date)] = d));
+  (A.swaps || []).forEach(([a, b]) => {
+    const x = byDate[a], y = byDate[b]; if (!x || !y) return;
+    const keep = ['date'];
+    const xs = {}, ys = {};
+    Object.keys(x).forEach(k => { if (!keep.includes(k)) { xs[k] = x[k]; delete x[k]; } });
+    Object.keys(y).forEach(k => { if (!keep.includes(k)) { ys[k] = y[k]; delete y[k]; } });
+    Object.assign(x, ys); Object.assign(y, xs);
+    x.movedFrom = x.movedFrom || y.date; y.movedFrom = y.movedFrom || x.date;
+  });
+  (A.eased || []).forEach(k => {
+    const d = byDate[k]; if (!d || !canEase(d)) return;
+    const was = d.items ? d.items.find(it => it.sport === 'Run').title : d.title;
+    if (d.items){
+      d.items = d.items.map(it => it.sport === 'Run' ? Object.assign({}, it, {title: 'Easy run', steps: ['Easy the whole way, same time or distance as planned', `Eased from: ${was}. No need to make it up.`], x: it.x ? Object.assign({}, it.x, {type: 'Easy', intensity: 'Easy'}) : it.x}) : it);
+    } else {
+      const e = Object.assign({}, d, {kind: 'E', role: 'E', strides: false});
+      d.origTitle = was; d.title = 'Easy run'; d.kind = 'E'; d.role = 'E'; d.strides = false;
+      d.hint = 'Swapped to an easy run. Hard workouts are not made up later; the plan carries on as written.';
+      d.steps = workoutSteps(e, 'base', 0, 1, plan.pace).concat([`Eased from: ${was}`]);
+      d.struct = workoutStruct(e, 'base', 0, 1, plan.pace);
+    }
+    d.eased = true;
+  });
+  // Conflicts after edits: back-to-back hard days, strength the day before the long run
+  plan.weeks.forEach((W, wi) => W.days.forEach((d, i) => {
+    const prev = i ? W.days[i - 1] : wi ? plan.weeks[wi - 1].days[6] : null;
+    d.warn = '';
+    if (!(d.movedFrom || (prev && prev.movedFrom))) return;
+    if (prev && dayHard(d) && dayHard(prev) && d.role !== 'RACE') d.warn = `Hard days back to back (${DAYS[(prev.date.getDay() + 6) % 7]} and ${DAYS[(d.date.getDay() + 6) % 7]}). If you keep it, make one of them easy.`;
+    else if (prev && d.role === 'L' && prev.lift) d.warn = 'Strength the day before your long run can leave your legs flat. Move the lift or the long run if you can.';
+  }));
+  return plan;
+}
+function dayEditHTML(d, i){
+  const W = P.weeks[wk];
+  const k = iso(d.date);
+  const edited = (A.swaps || []).some(p => p.includes(k)) || (A.eased || []).includes(k);
+  const opts = W.days.map((x, j) => j === i ? '' : `<option value="${iso(x.date)}">${DAYS[(x.date.getDay() + 6) % 7]}${dayItems(x).length ? ' (swap with ' + esc(dayItems(x)[0].title) + ')' : ' (rest day)'}</option>`).join('');
+  return `<div class="dayedit">
+    ${d.warn ? `<p class="flag" style="margin:0 0 8px">${esc(d.warn)}</p>` : ''}
+    <label class="field" style="border:0;padding:0">Move to <select data-move="${k}"><option value="">Pick a day…</option>${opts}</select></label>
+    <div class="planbtns" style="margin-top:8px">${canEase(d) ? `<button data-ease="${k}">Make it easy</button>` : ''}${edited ? `<button data-unedit="${k}">Undo changes to this day</button>` : ''}</div>
+  </div>`;
+}
+function editClick(e){
+  const ez = e.target.closest('[data-ease]'), un = e.target.closest('[data-unedit]');
+  if (ez){ A.eased = [...new Set([...(A.eased || []), ez.dataset.ease])]; }
+  else if (un){ const k = un.dataset.unedit; A.swaps = (A.swaps || []).filter(p => !p.includes(k)); A.eased = (A.eased || []).filter(x => x !== k); }
+  else return;
+  reEdit(e.target.closest('details.day'));
+}
+function editChange(e){
+  const sel = e.target.closest('[data-move]'); if (!sel || !sel.value) return;
+  A.swaps = [...(A.swaps || []), [sel.dataset.move, sel.value]];
+  reEdit(null, sel.value);
+}
+function reEdit(openEl, openDate){
+  const openId = openEl ? openEl.id : null;
+  save();
+  P = applyEdits(A.mode === 'upload' && A.custom ? buildCustomPlan() : buildPlanAll());
+  drawPlan();
+  const target = openDate ? P.weeks[wk].days.findIndex(d => iso(d.date) === openDate) : -1;
+  const el = target >= 0 ? $('d' + target) : openId ? $(openId) : null;
+  if (el) el.open = true;
+}
 function stepList(a){
   return a && a.length ? `<ul class="steps">${a.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
 }
@@ -1599,7 +1679,7 @@ function tuneClick(e){
   else if (k === 'aggr-ok'){ A.tuneStyle = 'aggressive'; tuneAsk = false; }
   else if (k === 'aggr-cancel'){ tuneAsk = false; drawPlan(); keepTune(); return; }
   else if (k === 'reset'){ A.tuneCap = 70; A.tuneStyle = 'steady'; tuneAsk = false; }
-  save(); P = buildPlanAll(); drawPlan(); keepTune();
+  save(); P = applyEdits(buildPlanAll()); drawPlan(); keepTune();
 }
 function keepTune(){ const t = $('tune'); if (t && A.tuneOpen){ t.open = true; } }
 function liftHint(t){

@@ -208,7 +208,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.13.0';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.13.1';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -1494,7 +1494,10 @@ function drawPlan(){
       ${spreadButton()}</details>` : ''}
     ${tuneCard()}
     <details class="card notes" open style="margin-top:16px"><summary>All weeks</summary><table class="overview">${overview}</table></details>
-    ${A.timeline === 'race' && !P.custom && !P.weeks[wk].days.some(d => d.role === 'RACE') ? raceGuideHTML().replace('id="raceguide" open', 'id="raceguide"').replace('<summary>Race week guide</summary>', '<summary>Race week guide (preview)</summary>') : ''}
+    ${A.timeline !== 'race' && !P.custom && !P.rw ? `<div class="card" style="margin-top:16px"><h3>Racing at the end of this plan?</h3>
+      <p class="sub">Add your race date and the plan puts race day on your calendar, tapers to it, and adds a race-week guide with fueling, pacing, and what to wear.</p>
+      <div class="planbtns" style="margin-top:8px"><button id="addrace">Add a race date</button></div></div>` : ''}
+    ${!P.custom && !P.weeks[wk].days.some(d => d.role === 'RACE') ? raceGuideHTML().replace('id="raceguide" open', 'id="raceguide"').replace('<summary>Race week guide</summary>', '<summary>Race week guide (preview)</summary>') : ''}
     <details class="card notes" id="gloss" style="margin-top:16px"><summary>Running words: what the workouts mean</summary>${glossaryHTML()}</details>
     <div class="card" id="missed" aria-live="polite" style="margin-top:16px">${missedPanel()}</div>
     ${P.custom ? `<div class="planbtns"><button id="reupload">Upload a different plan</button><button id="makegen">Build a plan for me</button></div>`
@@ -1524,6 +1527,7 @@ function drawPlan(){
   $('pprev').onclick = () => { if (wk > 0){ wk--; drawPlan(); } };
   $('pnext').onclick = () => { if (wk < P.N - 1){ wk++; drawPlan(); } };
   if ($('editans')) $('editans').onclick = () => showQuiz();
+  if ($('addrace')) $('addrace').onclick = () => { A.timeline = 'race'; save(); showQuiz(); idx = SCREENS.findIndex(x => x.title === 'When is it?'); render(); window.scrollTo(0, 0); };
   if ($('rwrepeat')) $('rwrepeat').onclick = () => { A.rwRepeats = [...new Set([...(A.rwRepeats || []), wk])]; save(); P = applyEdits(buildPlanAll()); drawPlan(); };
   if ($('toupload')) $('toupload').onclick = () => showQuiz('upload');
   if ($('reupload')) $('reupload').onclick = () => showQuiz('upload');

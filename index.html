@@ -196,7 +196,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.10.0';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.10.1';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -2569,9 +2569,12 @@ function missedNote(){
 function missedPanel(){
   const opt = (k, v, label) => `<button type="button" class="choice" data-ms="${k}" data-v="${v}" aria-pressed="${MS[k] === v}"><b>${label}</b></button>`;
   let h = `<h3>Missed some training?</h3>
-    <p class="sub">Life happens. Tell us what you missed and we'll adjust.</p>
+    <p class="sub">Life happens. Answer both questions and we'll suggest how to get back on track. Tap an answer again to clear it.</p>
+    <p style="margin:12px 0 6px;font-weight:600;font-size:15px">1. How much did you miss?</p>
     <div class="choices" style="grid-template-columns:repeat(3,1fr)">${opt('amount','days','A few days')}${opt('amount','week','About a week')}${opt('amount','more','2+ weeks')}</div>
-    <div class="choices two" style="margin-top:8px">${opt('why','busy','Life got busy')}${opt('why','sick','Sick or hurt')}</div>`;
+    <p style="margin:14px 0 6px;font-weight:600;font-size:15px">2. Why?</p>
+    <div class="choices two">${opt('why','busy','Life got busy')}${opt('why','sick','Sick or hurt')}</div>
+    ${MS.amount || MS.why ? `<button type="button" class="linkbtn" data-ms-clear style="margin-top:10px;background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:14px">Clear</button>` : ''}`;
   if (MS.amount && MS.why){
     h += `<div style="margin-top:12px;font-size:15px">${missedNote().map(t => `<p style="margin:0 0 8px">${t}</p>`).join('')}</div>`;
     if (MS.amount !== 'days' || MS.why === 'sick'){
@@ -2584,7 +2587,8 @@ function missedPanel(){
 }
 function missedClick(e){
   const b = e.target.closest('[data-ms]');
-  if (b){ MS[b.dataset.ms] = b.dataset.v; $('missed').innerHTML = missedPanel(); return; }
+  if (b){ const k = b.dataset.ms; MS[k] = MS[k] === b.dataset.v ? null : b.dataset.v; $('missed').innerHTML = missedPanel(); return; }   // tap again to clear
+  if (e.target.closest('[data-ms-clear]')){ MS = {amount:null, why:null}; $('missed').innerHTML = missedPanel(); return; }
   if (e.target.id === 'pushback') pushBack();
 }
 function pushBack(){

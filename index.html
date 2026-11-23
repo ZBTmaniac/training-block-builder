@@ -198,7 +198,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.12.1';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.12.2';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -1500,7 +1500,7 @@ function drawPlan(){
   if ($('makegen')) $('makegen').onclick = () => showQuiz('gen');
   if ($('xfit')) $('xfit').onclick = () => exportWatch('fit');
   if ($('xzwo')) $('xzwo').onclick = () => exportWatch('zwo');
-  $('icusend').onclick = icuSend; $('icudel').onclick = icuRemove;
+  $('icusend').onclick = icuSend; $('icudel').onclick = () => icuRemove(false);
   $('xics').onclick = exportICS; $('xpdf').onclick = exportPDF; $('xxlsx').onclick = exportXLSX;
   $('missed').onclick = missedClick;
   if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
@@ -1564,7 +1564,10 @@ function checkinHTML(d){
   const k = iso(d.date), got = (A.checkins || []).find(c => c.date === k);
   if (got) return `<div class="dayedit"><p style="margin:0 0 6px"><b>Your result:</b> ${esc(got.label)}${got.lthr ? `, threshold HR ${got.lthr} bpm` : ''}.</p>
     <p class="quiet" style="margin:0 0 8px">${esc(got.effect || '')}</p>
-    <div class="planbtns"><button data-ckdel="${k}">Remove this result</button></div></div>`;
+    ${CKDEL === k
+      ? `<p class="flag" style="margin:0 0 8px"><b>Remove this result?</b> Your paces${got.lthr ? ', threshold HR,' : ''} and goal check go back to ${(A.checkins || []).filter(c => c.date !== k && c.t5k).length ? 'your previous check-in' : 'your original answers'}. This can't be undone, but you can enter the result again.</p>
+         <div class="planbtns"><button data-ckdelok="${k}">Yes, remove it</button><button data-ckdelno>Keep it</button></div>`
+      : `<div class="planbtns"><button data-ckdel="${k}">Remove this result</button></div>`}</div>`;
   const u = A.units, D = A.distance;
   const races = ['5K', '10K'].concat(D === 'Half' || D === 'Full' ? ['Half'] : []);
   return `<div class="dayedit" data-ckform="${k}"><p style="margin:0 0 8px"><b>Enter your result</b></p>
@@ -1579,13 +1582,14 @@ function checkinHTML(d){
     <p class="err" data-ckerr style="margin:4px 0"></p>
     <div class="planbtns"><button data-cksave="${k}">Save and update my plan</button></div></div>`;
 }
-let CKMODE = 'tt';
+let CKMODE = 'tt', CKDEL = null;   // CKDEL: date of a result waiting for 'yes, remove'
 function parseHMS(t){ const p = String(t).trim().split(':').map(Number); if (p.some(isNaN) || !p.length) return 0; return p.reduce((a, b) => a * 60 + b, 0) * (p.length === 1 ? 60 : 1); }
 function checkinClick(e){
   const mode = e.target.closest('[data-ckmode]');
   if (mode){ CKMODE = mode.dataset.ckmode; const det = mode.closest('details.day'); drawPlan(); if (det && $(det.id)) $(det.id).open = true; return; }
-  const del = e.target.closest('[data-ckdel]');
-  if (del){ A.checkins = (A.checkins || []).filter(c => c.date !== del.dataset.ckdel); reEdit(del.closest('details.day')); return; }
+  const ask = e.target.closest('[data-ckdel]'), ok = e.target.closest('[data-ckdelok]'), no = e.target.closest('[data-ckdelno]');
+  if (ask || no){ CKDEL = ask ? ask.dataset.ckdel : null; const det = (ask || no).closest('details.day'); drawPlan(); if (det && $(det.id)) $(det.id).open = true; return; }
+  if (ok){ A.checkins = (A.checkins || []).filter(c => c.date !== ok.dataset.ckdelok); CKDEL = null; reEdit(ok.closest('details.day')); return; }
   const sv = e.target.closest('[data-cksave]'); if (!sv) return;
   const f = sv.closest('[data-ckform]'), q = n => f.querySelector(`[data-ck="${n}"]`), err = t => { f.querySelector('[data-ckerr]').textContent = t; };
   let t5k = 0, label = '', long = false;
@@ -2575,10 +2579,16 @@ async function icuSend(){
     status(e instanceof TypeError ? 'Couldn\'t reach Intervals.icu from this browser (offline, or the request was blocked). Use the watch files instead and drop them onto your Intervals.icu calendar.' : e.message);
   }
 }
-async function icuRemove(){
+async function icuRemove(confirmed){
   const status = t => { $('icustatus').textContent = t; };
   ICU.key = $('icukey').value.trim(); ICU.athlete = $('icuath').value.trim() || '0';
   if (!ICU.key || !(ICU.sent || []).length){ status('Nothing sent from this device to remove.'); return; }
+  if (!confirmed){
+    $('icustatus').innerHTML = `<b>Remove the ${ICU.sent.length} workouts this app sent to Intervals.icu?</b> Workouts you added yourself aren't touched. You can send them again anytime.
+      <span class="planbtns" style="display:flex;margin-top:8px"><button id="icudelok">Yes, remove them</button><button id="icudelno">Keep them</button></span>`;
+    $('icudelok').onclick = () => icuRemove(true); $('icudelno').onclick = () => status('');
+    return;
+  }
   status('Removing…');
   try {
     await icuCall('/events/bulk-delete', 'PUT', ICU.sent.map(id => ({external_id: id})));

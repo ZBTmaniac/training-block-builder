@@ -38,8 +38,8 @@ Experience sets how plans start, how fast they build, and how many options you s
 | Run-walk start if you can't run 30 minutes yet | Yes | Yes, if below the starting floor | Yes, if below the starting floor |
 | Workout wording | Plain language, effort out of 10, minutes shown | Standard | Standard |
 | Strength start | 1 light session a week for the first month | As chosen | As chosen |
-| Weekday run limit | 70 minutes | 70, 80 or 90 minutes | 70, 80 or 90 minutes |
-| Build style | Steady | Steady | Steady, Daniels or Aggressive |
+| Weekday run limit | 70 minutes | 70, 80, or 90 minutes | 70, 80, or 90 minutes |
+| Build style | Steady | Steady | Steady, Daniels, or Aggressive |
 | Goal-check improvement range (12 weeks) | 5–10% | 3–6% | 1–3% |
 
 ### New runners: the run-walk start
@@ -94,7 +94,7 @@ The check shows live on the benchmark screen and again on the plan. Big-stretch 
 - Peak volume is time-aware: if your run days can't fit the usual peak within the long-run and weekday run limits at your easy pace, the plan peaks at what fits and suggests adding a run day.
 - Runners who have trained before can raise the weekday run limit to 80 or 90 minutes. The extra is spread across easy runs (and the easy parts of workout days) rather than added to one run; recovery runs and the long run don't change.
 - If you already run more than your days and limits can hold, weekday runs go up to 90 minutes so the plan doesn't cut your volume.
-- Marathon plans stop for a "know what you're signing up for" page only when the peak lands more than about 15% under the usual peak **and** a different choice of days, weeks or weekday limit would fix it. When pace is the limit (even 6 days can't fit the usual mileage), the plan is built around time on your feet and says so in a note instead.
+- Marathon plans stop for a "know what you're signing up for" page only when the peak lands more than about 15% under the usual peak **and** a different choice of days, weeks, or weekday limit would fix it. When pace is the limit (even 6 days can't fit the usual mileage), the plan is built around time on your feet and says so in a note instead.
 
 ## 5. What fills each week?
 
@@ -123,7 +123,7 @@ New runners get easier versions of the quality days. When marathon long runs car
 - Built toward a distance-specific peak, then capped: the lesser of about 25–30% of the week and 150 minutes, with a 20-mile ceiling (after Daniels). 5K and 10K long runs are shorter (60–90 minutes by experience) and stretch with a longer weekday run limit.
 - Slower marathoners with 16+ weeks and a starting long run of about 6 miles take two dress-rehearsal long runs to 3 hours or 16 miles; every other long run stays under about 2.5 hours (informed by the Hansons approach of capping the long run and leaning on weekly volume).
 - A long run over about 40% of the week is flagged, with fixes: add a short run, add a midweek medium-long run, run-walk, or a longer plan.
-- Long runs are hard because of the distance, not the pace. Dress rehearsals practice race fueling, kit and goal-pace segments.
+- Long runs are hard because of the distance, not the pace. Dress rehearsals practice race fueling, kit, and goal-pace segments.
 
 ### Other runs
 
@@ -158,11 +158,11 @@ New runners get easier versions of the quality days. When marathon long runs car
 - Any day's session can move to another day in the same week (it swaps with what's there, and strength moves with it).
 - A hard workout can be swapped for an easy run of the same distance. It isn't made up later.
 - After a move, back-to-back hard days and strength the day before the long run are flagged.
-- Changes are saved by date and carry into calendar, Excel, watch files and Intervals.icu.
+- Changes are saved by date and carry into calendar, Excel, watch files, and Intervals.icu.
 
 ### Missed training
 
-- A few days: carry on. About a week: carry on, swap in the missed week's most important session (long run > quality > tempo), and don't add the missed miles. Sick, hurt or 2+ weeks: step back before stepping up.
+- A few days: carry on. About a week: carry on, swap in the missed week's most important session (long run > quality > tempo), and don't add the missed miles. Sick, hurt, or 2+ weeks: step back before stepping up.
 - Push back: plan-length plans shift later; race-date plans rebuild from next week at a lower volume, keeping the full taper.
 
 ## 7. What about uploaded and multisport plans?
@@ -187,9 +187,9 @@ The app explains workout terms in plain words inside every plan (Whole plan → 
 - **Starting floor:** the smallest weekly volume a plan for that distance starts from. Below it, new runners get the run-walk start.
 - **Step-up:** an increase in weekly volume after holding a level for a few weeks.
 - **Cutback week:** a lighter week every few weeks so your body can absorb the training.
-- **Build style:** how fast volume steps up (Steady, Daniels or Aggressive).
-- **Weekday run limit:** the longest a non-long run can be (70, 80 or 90 minutes).
-- **Expert mode:** turns off the volume, distance and time safety caps.
+- **Build style:** how fast volume steps up (Steady, Daniels, or Aggressive).
+- **Weekday run limit:** the longest a non-long run can be (70, 80, or 90 minutes).
+- **Expert mode:** turns off the volume, distance, and time safety caps.
 
 **Runs and workouts**
 
@@ -197,7 +197,7 @@ The app explains workout terms in plain words inside every plan (Whole plan → 
 - **Recovery run:** shorter and slower than easy, the day after a hard session.
 - **Long run:** the week's longest run, at easy pace.
 - **Medium-long run:** a midweek run longer than other weekday runs but shorter than the long run, used on 5–6 day plans.
-- **Dress rehearsal:** a marathon long run that practices race-day fueling, kit and goal pace.
+- **Dress rehearsal:** a marathon long run that practices race-day fueling, kit, and goal pace.
 - **Strides:** about 20 seconds quick and relaxed, with full recovery. Builds leg speed without fatigue.
 - **Tempo / threshold:** comfortably hard, about the effort you could hold for an hour. You can say a few words but not hold a conversation.
 - **Cruise intervals:** threshold-pace reps with short rests (Daniels).
@@ -207,14 +207,14 @@ The app explains workout terms in plain words inside every plan (Whole plan → 
 - **Run-walk:** planned run and walk intervals. A way to build up, and a legitimate way to race.
 - **Brick:** a bike session followed straight away by a run (multisport plans).
 
-**Effort, pace and heart rate**
+**Effort, pace, and heart rate**
 
 - **Effort (RPE):** rate of perceived exertion, how hard something feels from 1 to 10.
 - **Benchmark:** the recent race or time trial your paces come from.
 - **Riegel formula:** a standard way to predict a time at one distance from a time at another.
 - **VDOT:** Jack Daniels' fitness score, which maps a race time to training paces.
 - **Threshold heart rate (LTHR):** the heart rate you can hold for about an hour of hard running. Heart-rate zones are percentages of it.
-- **Goal check:** compares your goal time to your projected race-day range and rates it on track, ambitious or big stretch.
+- **Goal check:** compares your goal time to your projected race-day range and rates it on track, ambitious, or big stretch.
 - **Heat adaptation:** training in warmth so your body copes better with a hot race.
 
 ---
@@ -225,7 +225,7 @@ The app explains workout terms in plain words inside every plan (Whole plan → 
 
 - Jack Daniels, *Daniels' Running Formula* — VDOT pace tables, cruise intervals, long-run limits, holding volume before increasing it.
 - Luke Humphrey and Keith and Kevin Hanson, *Hansons Marathon Method* — 16-mile long-run cap, six days with three key sessions.
-- Hal Higdon's training programs (5K, 10K, half and marathon; novice to advanced) — beginner structure and volumes.
+- Hal Higdon's training programs (5K, 10K, half, and marathon; novice to advanced) — beginner structure and volumes.
 - Greg McMillan, McMillan Running 5K and 10K plans — volume and long-run prerequisites by level.
 - Pete Pfitzinger and Philip Latter, *Faster Road Racing* — 5K to half marathon volumes and medium-long runs.
 - Brad Hudson and Matt Fitzgerald, *Run Faster from the 5K to the Marathon* — short-race training structure.

@@ -198,7 +198,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.11.0';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.11.1';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -358,7 +358,7 @@ const SCREENS = [
       <div class="card"><h3>Your week</h3>
       <label class="field">Long run day ${daySelect('longDay')}</label>
       <label class="field">Hard workout day ${daySelect('qualityDay')}</label>
-      <p class="quiet" style="margin:8px 0 0">Your hard workout can be on a track, road or treadmill.</p></div>`,
+      <p class="quiet" style="margin:8px 0 0">Your hard workout can be on a track, road, or treadmill.</p></div>`,
     check: () => {
       if (!A.days) return 'Pick how many days you can run.';
       if (A.expert) return '';
@@ -370,7 +370,7 @@ const SCREENS = [
   },
   {
     title:'Strength training',
-    lead:'Lifting protects joints, tendons and bones, holds your form late in races, and builds the power that makes you faster. Any amount helps.',
+    lead:'Lifting protects joints, tendons, and bones, holds your form late in races, and builds the power that makes you faster. Any amount helps.',
     render: () => `
       <div class="card"><h3>Days per week</h3>
       ${choices('strength', [{v:0,label:'None'},{v:1,label:'1'},{v:2,label:'2'},{v:3,label:'3'}], 'row')}</div>
@@ -378,7 +378,7 @@ const SCREENS = [
       ${choices('equipment', [
         {v:'bw', label:'Bodyweight', sub:'No equipment, or a backpack you can load'},
         {v:'db', label:'Dumbbells or kettlebells', sub:'At home or at the gym'},
-        {v:'bb', label:'Barbell or full gym', sub:'Rack, bar and plates'}
+        {v:'bb', label:'Barbell or full gym', sub:'Rack, bar, and plates'}
       ])}</div>` : ''}
       ${strengthNote()}`,
     check: () => {
@@ -404,11 +404,11 @@ function expertCard(){
     <p class="sub">Volume, distance and time safety checks are off. The plan builds whatever you ask for.</p>
     <button type="button" class="choice" data-expert="off"><b>Turn expert mode off</b></button></div>`;
   if (expertAsk) return `<div class="card"><h3>Are you sure?</h3>
-    <p class="sub">This removes volume, distance and time safety checks. The plan will build whatever you ask for, even if it makes no sense.</p>
+    <p class="sub">This removes volume, distance, and time safety checks. The plan will build whatever you ask for, even if it makes no sense.</p>
     <div class="choices two"><button type="button" class="choice" data-expert="cancel"><b>Cancel</b></button>
     <button type="button" class="choice" data-expert="on"><b>Yes, turn it on</b></button></div></div>`;
   return `<div class="card"><h3>Experienced runner?</h3>
-    <p class="sub">Turn off the caps on long runs, single runs and weekly volume. Off by default.</p>
+    <p class="sub">Turn off the caps on long runs, single runs, and weekly volume. Off by default.</p>
     <button type="button" class="choice" data-expert="ask"><b>I know what I'm doing</b></button></div>`;
 }
 // ---------- race-day heat ----------
@@ -427,7 +427,7 @@ function heatCard(){
       <div style="font-size:14px;margin-top:8px">
         <p style="margin:0 0 8px"><b>Expect to slow down.</b> Most runners race best somewhere around 45–60°F (7–15°C). Above that, the same pace takes more effort. In marathons, mid-pack runners slow by roughly 4–5 seconds per mile for every °C (about 2°F) above 60°F, and humidity makes it worse. Shorter races are affected less.</p>
         <p style="margin:0 0 8px"><b>Your body adapts in 1–2 weeks.</b> With regular heat exposure, most adaptations happen within 7–14 days: lower heart rate at the same effort, more blood plasma, and earlier, heavier sweating.</p>
-        <p style="margin:0 0 8px"><b>How to adapt:</b> do some easy runs in the warmest part of the day, or sit in a sauna or hot bath right after a run. Start with 10–15 minutes and build toward 20–30. Keep the runs easy, drink plenty, and stop if you feel dizzy, confused or stop sweating. We don't recommend overdressing (sweat suits and extra layers): it's riskier, and there's little evidence it helps athletes already trained for their race.</p>
+        <p style="margin:0 0 8px"><b>How to adapt:</b> do some easy runs in the warmest part of the day, or sit in a sauna or hot bath right after a run. Start with 10–15 minutes and build toward 20–30. Keep the runs easy, drink plenty, and stop if you feel dizzy, confused, or stop sweating. We don't recommend overdressing (sweat suits and extra layers): it's riskier, and there's little evidence it helps athletes already trained for their race.</p>
         <p style="margin:0 0 8px"><b>On race day:</b> start slower than goal pace, drink to thirst with some sodium, pour water over yourself at aid stations, and adjust your goal to the conditions. Pacing by effort or heart rate works better than pace in the heat.</p>
         <p class="quiet" style="margin:0">If you pick Warm or Hot, the plan adds heat-adaptation work in the two weeks before race week and race-day heat tips.</p>
       </div></details></div>`;
@@ -1330,7 +1330,7 @@ function noteList(){
     if (C.placement.length > 10) out.push(`…and ${C.placement.length - 10} more scheduling notes.`);
     return out;
   }
-  if (A.expert) return ['Expert mode is on: volume, distance and time safety checks are off.'];
+  if (A.expert) return ['Expert mode is on: volume, distance, and time safety checks are off.'];
   if (N.rwOnly) out.push(`This plan gets you running: run-walk sessions three times a week that build ${N.rwDone ? 'to 30 minutes of running without stopping' : 'as far as your timeline allows, faster than ideal'}. ${A.timeline === 'race' ? 'You can absolutely race with walk breaks, and lots of people do.' : ''}`);
   if (N.rwThen) out.push(`Weeks 1–${N.rwThen.rwWeeks} get you running 30 minutes without stopping. From week ${N.rwThen.regWeek} it becomes a regular ${A.distance} plan, so read Running words before then.`);
   if (needsRunWalk()) out.push('Run-walk weeks have three runs with a rest day between each; other days are rest or an optional walk while your legs adapt.' + (+A.strength ? ' Strength starts with one light session a week for the first month.' : ''));
@@ -1894,7 +1894,7 @@ function parseUpload(sheets, fileName){
     if (intensity === null){
       const num = +String(get('intensity')).replace(/[^\d.]/g, '');
       intensity = num ? (num >= 7 ? 'Hard' : num >= 5 ? 'Moderate' : 'Easy') : '';
-      if (!num) warnings.push(`Row ${rn}: Intensity "${get('intensity')}" isn't Easy, Moderate or Hard, so it was left blank.`);
+      if (!num) warnings.push(`Row ${rn}: Intensity "${get('intensity')}" isn't Easy, Moderate, or Hard, so it was left blank.`);
     }
     if (!intensity) intensity = ({Quality:'Hard', Tempo:'Hard', Race:'Hard', Long:'Moderate'})[type] || 'Easy';
     // distance
@@ -2125,7 +2125,7 @@ function gridPreview(res){
   const w1 = res.sessions.filter(x => x.week === 1);
   return `<p class="flag"><b>Read as a weekly grid.</b> We guessed each day's sport and type from its text. Check week 1:
     <ul class="issues">${w1.map(x => `<li>${DAYS[x.day]}: ${esc(x.sport === 'Other' ? 'Cross-train/other' : x.sport)}${x.sport !== 'Rest' ? ' · ' + esc(x.type === 'Long' ? 'Long run' : x.type) : ''}${sessionLabel(x) ? ' · ' + esc(sessionLabel(x)) : ''}${x.optional ? ' (optional)' : ''}</li>`).join('')}</ul>
-    <span class="quiet">The full text of every day is kept. Guesses only drive colors, totals and scheduling notes.</span></p>`;
+    <span class="quiet">The full text of every day is kept. Guesses only drive colors, totals, and scheduling notes.</span></p>`;
 }
 function drawUpload(){
   $('step').textContent = 'Your own plan';
@@ -2137,8 +2137,8 @@ function drawUpload(){
   $('screen').innerHTML = `<h1>Upload your plan</h1>
     <p class="lead">Fill in the template (one row per session), then upload it here. The file stays on your phone.</p>
     <div class="card"><h3>1. Get the template</h3>
-      <p class="sub">An Excel file with dropdowns for day, sport, type and intensity, a sample plan, and a strength tab.</p>
-      <button type="button" class="choice" data-u="template"><b>Download template</b><span>Opens in Excel, Numbers or Google Sheets</span></button></div>
+      <p class="sub">An Excel file with dropdowns for day, sport, type, and intensity; a sample plan; and a strength tab.</p>
+      <button type="button" class="choice" data-u="template"><b>Download template</b><span>Opens in Excel, Numbers, or Google Sheets</span></button></div>
     <div class="card"><h3>2. Plan settings</h3>
       <label class="field">Week 1 starts <input type="date" data-ufield="start" value="${esc(UPF.start)}"></label>
       <div style="margin-top:10px">${['mi','km'].map(u => `<button type="button" class="choice" data-u="units" data-v="${u}" aria-pressed="${UPF.units === u}" style="display:inline-block;width:48%;margin-right:2%"><b>${u === 'mi' ? 'Miles' : 'Kilometers'}</b></button>`).join('')}</div>
@@ -2231,7 +2231,7 @@ function downloadTemplate(){
   const help = [['How to fill this in'],
     ['One row per session. Two sessions on one day = two rows with the same Week and Day.'],
     ['Required: Week (1, 2, 3…) and Day (Mon–Sun). Everything else is optional.'],
-    ['Sport: Run, Bike, Swim, Brick, Strength, Other or Rest. Type: Easy, Quality, Tempo, Long, Recovery, Race or Rest.'],
+    ['Sport: Run, Bike, Swim, Brick, Strength, Other, or Rest. Type: Easy, Quality, Tempo, Long, Recovery, Race, or Rest.'],
     ['Details: separate steps with a | (vertical bar), and each becomes its own line in the app.'],
     ['Distance: a number. The app asks for miles or km when you upload. Swims are yards or meters (you can write "1500 m").'],
     ['Duration: minutes (45), or h:mm (1:30).'],

@@ -2584,7 +2584,7 @@ async function icuRemove(confirmed){
   ICU.key = $('icukey').value.trim(); ICU.athlete = $('icuath').value.trim() || '0';
   if (!ICU.key || !(ICU.sent || []).length){ status('Nothing sent from this device to remove.'); return; }
   if (!confirmed){
-    $('icustatus').innerHTML = `<b>Remove the ${ICU.sent.length} workouts this app sent to Intervals.icu?</b> Workouts you added yourself aren't touched. You can send them again anytime.
+    $('icustatus').innerHTML = `<b>Remove the ${ICU.sent.length} workouts this app sent to Intervals.icu?</b> Workouts added outside of this app aren't touched. You can send them again anytime.
       <span class="planbtns" style="display:flex;margin-top:8px"><button id="icudelok">Yes, remove them</button><button id="icudelno">Keep them</button></span>`;
     $('icudelok').onclick = () => icuRemove(true); $('icudelno').onclick = () => status('');
     return;

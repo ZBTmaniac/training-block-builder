@@ -95,6 +95,8 @@ label.field input,label.field select{font-size:16px;background:var(--bg);border:
 .tabhead{font-family:var(--display);font-weight:700;font-size:32px;line-height:1;margin:6px 0 4px}
 .nexttabs{display:flex;gap:10px;margin:20px 0 0}
 .nexttabs button{flex:1;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;cursor:pointer}
+.updatebar{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));z-index:30;max-width:616px;margin:0 auto;display:flex;gap:12px;align-items:center;background:var(--ink);color:var(--bg);border-radius:14px;padding:12px 14px;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.2)}
+.updatebar button{flex:none;border:0;border-radius:20px;padding:8px 14px;background:var(--bg);color:var(--ink);font-weight:600;cursor:pointer}
 .dayedit{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
 .dayedit select{margin-left:8px}
 .nexttabs b{display:block}.nexttabs span{font-size:13px;color:var(--muted)}
@@ -210,7 +212,7 @@ const DEFAULTS = {
   expert:false, ackTough:false,
   lthr:'', lthrSource:'test', effort:'pace',
   mode:'gen', custom:null,
-  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false, tuneStyle:'steady', tuneCap:70, tuneOpen:false, swaps:[], eased:[], checkins:[]
+  heat:'', heatVsTraining:'', canRun:'', rwRepeats:[], glossaryOk:false, tuneStyle:'steady', tuneCap:70, tuneOpen:false, swaps:[], eased:[], checkins:[], raceResult:null
 };
 let A = load();
 let idx = 0;
@@ -262,7 +264,10 @@ const SCREENS = [
       {v:'Half', label:'Half marathon', sub:'13.1 mi'}, {v:'Full', label:'Marathon', sub:'26.2 mi'}
     ], 'two') + `<p class="quiet" style="margin:12px 0 0"><a href="${RULES_URL}" target="_blank" rel="noopener">How plans are built, with sources</a></p><div class="card" style="margin-top:16px"><h3>Already have a plan?</h3>
       <p class="sub">Upload it from a spreadsheet and use this app to follow it, add strength, and export it.</p>
-      <button type="button" class="choice" data-upload="1"><b>Upload my own plan</b><span>Excel or CSV</span></button></div>`,
+      <button type="button" class="choice" data-upload="1"><b>Upload my own plan</b><span>Excel or CSV</span></button></div>
+      <div class="card"><h3>Moving to a new phone or browser?</h3>
+      <p class="sub">Restore the backup file you saved from this app and pick up where you left off.</p>
+      <button type="button" class="choice" data-restore="1"><b>Restore from a backup</b><span>A .json file saved from Training Block Builder</span></button></div>`,
     check: () => A.distance ? '' : 'Pick a distance to continue.'
   },
   {
@@ -498,6 +503,7 @@ $('screen').addEventListener('click', e => {
   }
   if (uploadMode){ uploadClick(e); return; }
   if (e.target.closest('[data-upload]')){ showUpload(); return; }
+  if (e.target.closest('[data-restore]')){ pickRestore(); return; }
   if (ackMode){ ackClick(e); return; }
   if (glossMode) return;
   const c = e.target.closest('.choice');
@@ -1439,6 +1445,7 @@ function drawPlan(){
         ${items.length ? items.map(it => `<div class="item ${it.cls}"><h3>${esc(it.title)}${it.sub && it.sport !== 'Strength' ? ' · ' + esc(it.sub) : ''}</h3>${it.hint ? `<p>${esc(it.hint)}</p>` : ''}${stepList(it.steps)}</div>`).join('')
           : `<div class="item"><p>${esc(d.hint || HINT.off)}</p></div>`}
         ${d.kind === 'CHK' ? checkinHTML(d) : ''}
+        ${d.role === 'RACE' && !P.custom ? afterRaceHTML(d) : ''}
         ${dayEditHTML(d, i)}
       </div></details>`;
   }).join('');
@@ -1458,6 +1465,7 @@ function drawPlan(){
     <div class="strip">${strip}</div>
     <div class="legend">${sportsUsed ? sportsUsed.map(c => `<span class="l-${c}">${({run:'Run', bike:'Bike', swim:'Swim', lift:'Strength', other:'Cross-train'})[c]}</span>`).join('') : `<span class="l-run">Run</span>${+A.strength ? '<span class="l-lift">Strength</span>' : ''}`}</div>
     ${cards}
+    ${W.days.some(d => d.role === 'RACE') && !P.custom ? raceGuideHTML() : ''}
     ${goalCard()}
     <div class="nexttabs"><button data-tab="plan"><b>Whole plan</b><span>All weeks, notes, adjust the build</span></button>
       <button data-tab="take"><b>Export &amp; sync</b><span>Calendar, PDF, Excel, watch</span></button></div>
@@ -1471,6 +1479,7 @@ function drawPlan(){
       ${spreadButton()}</details>` : ''}
     ${tuneCard()}
     <details class="card notes" open style="margin-top:16px"><summary>All weeks</summary><table class="overview">${overview}</table></details>
+    ${A.timeline === 'race' && !P.custom && !P.weeks[wk].days.some(d => d.role === 'RACE') ? raceGuideHTML().replace('id="raceguide" open', 'id="raceguide"').replace('<summary>Race week guide</summary>', '<summary>Race week guide (preview)</summary>') : ''}
     <details class="card notes" id="gloss" style="margin-top:16px"><summary>Running words: what the workouts mean</summary>${glossaryHTML()}</details>
     <div class="card" id="missed" style="margin-top:16px">${missedPanel()}</div>
     ${P.custom ? `<div class="planbtns"><button id="reupload">Upload a different plan</button><button id="makegen">Build a plan for me</button></div>`
@@ -1490,6 +1499,7 @@ function drawPlan(){
           <li><b>Calendar</b> adds sessions from today on as all-day events. On iPhone, use Safari: tap the downloads arrow, tap the file, then Add All.</li>
           <li><b>PDF</b> opens the print view: choose Save as PDF, or on iPhone tap Share → Print, then Share again.</li></ul></details></div>
     ${icuCard()}
+    ${keepCard()}
     </div>`;
   $('pprev').onclick = () => { if (wk > 0){ wk--; drawPlan(); } };
   $('pnext').onclick = () => { if (wk < P.N - 1){ wk++; drawPlan(); } };
@@ -1504,7 +1514,7 @@ function drawPlan(){
   $('xics').onclick = exportICS; $('xpdf').onclick = exportPDF; $('xxlsx').onclick = exportXLSX;
   $('missed').onclick = missedClick;
   if ($('addday')) $('addday').onclick = () => { A.days = +A.days + 1; save(); showPlan(); };
-  if (!$('plan').dataset.tuneBound){ $('plan').addEventListener('click', tuneClick); $('plan').addEventListener('click', editClick); $('plan').addEventListener('click', checkinClick); $('plan').addEventListener('change', editChange); $('plan').dataset.tuneBound = '1'; }
+  if (!$('plan').dataset.tuneBound){ $('plan').addEventListener('click', tuneClick); $('plan').addEventListener('click', editClick); $('plan').addEventListener('click', checkinClick); $('plan').addEventListener('click', afterRaceClick); $('plan').addEventListener('change', editChange); $('plan').dataset.tuneBound = '1'; }
   $('plan').querySelectorAll('[data-week]').forEach(b => b.onclick = () => { wk = +b.dataset.week; ptab = 'week'; drawPlan(); window.scrollTo(0, 0); });
   $('plan').querySelectorAll('a[href="#gloss"]').forEach(a => a.onclick = e => { e.preventDefault(); setTab('plan'); const g = $('gloss'); g.open = true; g.scrollIntoView({block:'start'}); });
   syncTabs();
@@ -1559,6 +1569,137 @@ function applyEdits(plan){
     else if (prev && d.role === 'L' && prev.lift) d.warn = 'Strength the day before your long run can leave your legs flat. Move the lift or the long run if you can.';
   }));
   return plan;
+}
+// =====================================================================
+// RACE WEEK GUIDE: fueling, pacing, what to wear, logistics, and a send-off
+// =====================================================================
+function raceSecs(){   // target finish time: goal if it's within reach, else the middle of the projected range
+  const g = P && P.goal;
+  if (g) return g.tier === 'big' ? (g.fast + g.slow) / 2 : g.goal;
+  const t5 = benchT5k(); if (!t5) return 0;
+  return t5 * Math.pow(DIST_MI[A.distance] / 3.107, 1.06);
+}
+function raceGuideHTML(){
+  const D = A.distance, long = D === 'Half' || D === 'Full', T = raceSecs(), u = A.units;
+  const distU = u === 'km' ? DIST_MI[D] * KM : DIST_MI[D];
+  const pace = T ? T / DIST_MI[D] : 0;   // s per mile
+  const heat = heatSlowdown();
+  // Even-pace checkpoints every 5 km, plus halfway for the half and marathon
+  const marks = [];
+  for (let k = 5; k < DIST_MI[D] * KM - 0.5; k += 5) marks.push([`${k} km`, k / KM]);
+  if (long) marks.push(['Halfway', DIST_MI[D] / 2]);
+  marks.sort((a, b) => a[1] - b[1]); marks.push(['Finish', DIST_MI[D]]);
+  const sec = s => fmtSecs(s);
+  const pacing = T ? `<p>Your target: <b>${sec(T)}</b>, about <b>${fmtPace(pace)}</b>${P.goal && P.goal.tier === 'big' ? ' (the middle of your projected range, since your goal is a big stretch)' : P.goal ? ' (your goal)' : ' (projected from your benchmark)'}.${heat ? ` If it's as warm as you expect, plan on ${heat[0]}–${heat[1]} s/${u} slower.` : ''}</p>
+      <p class="quiet" style="margin:0 0 6px">Even-pace splits on a flat course:</p>
+      <table class="overview">${marks.map(([n, mi]) => `<tr><td style="text-align:left">${n}</td><td>${sec(pace * mi)}</td></tr>`).join('')}</table>`
+    : `<p>Add a benchmark or a check-in result and this shows your target pace and splits.</p>`;
+  const fuelLong = D === 'Full'
+    ? `<li><b>Carb load for 2 days.</b> For 36–48 hours before the race, make carbs the main part of every meal and snack. Research-backed loading is about 10–12 g of carbs per kg of body weight a day (4.5–5.5 g per pound), which is more than most people expect, so swap rather than add: less fat, fiber, and protein; more rice, pasta, potatoes, bread, bagels, oatmeal, pretzels, juice, and sports drink.</li>
+       <li><b>Carbs aren't the same as treats.</b> Pizza, burgers, pastries, and ice cream are mostly fat. A few meals like that leave you heavy and short on carbs. A plain bagel with jam beats a doughnut; pasta with tomato sauce beats fettuccine Alfredo.</li>`
+    : D === 'Half'
+    ? `<li><b>Carb-focused day before.</b> For races up to about 90 minutes, a normal carb-rich day before is enough. For longer half marathons, make carbs the main part of every meal for the last 24–36 hours: rice, pasta, potatoes, bread, bagels, oatmeal. Swap rather than add, and keep fat and fiber low.</li>
+       <li><b>Carbs aren't the same as treats.</b> Pizza and pastries are mostly fat. A plain bagel with jam beats a doughnut.</li>`
+    : `<li><b>No carb loading needed</b> for a ${RACE_NAME[D]}. Eat normally, with a carb-based dinner the night before.</li>`;
+  const inRace = D === 'Full'
+    ? `<li><b>During the race:</b> start fueling in the first 30–45 minutes and keep going every 20–30 minutes. Aim for 30–60 g of carbs an hour (about one gel every 30–45 minutes), or whatever you practiced on long runs. Higher amounts (up to about 90 g an hour) only work if you trained your gut with them. Take gels with water.</li>`
+    : D === 'Half'
+    ? `<li><b>During the race:</b> if you'll be out more than about 75 minutes, take 30–60 g of carbs an hour, starting around 30–45 minutes in, using what you practiced. Under that, water is usually enough.</li>`
+    : `<li><b>During the race:</b> no fuel needed. Water if it's hot.</li>`;
+  const warm = {'5K':'10–15 minutes of easy jogging, a few dynamic drills, and 4 strides', '10K':'10 minutes of easy jogging and 3–4 strides', 'Half':'5–10 minutes of easy jogging and a couple of strides', 'Full':'a few minutes of walking and easy jogging; the first miles are your warm-up'}[D];
+  return `<details class="card notes" id="raceguide" open style="margin-top:16px"><summary>Race week guide</summary>
+    <h3 style="margin:12px 0 6px;font-size:16px">This week</h3>
+    <ul>
+      <li>Trust the taper. Feeling restless or a little flat is normal; the fitness is already there.</li>
+      <li><b>Nothing new on race day:</b> no new shoes, clothes, breakfast, or gels.</li>
+      <li>Check the course map, start time, parking or transit, and bag check.</li>
+      <li>Sleep well the two nights before. A rough night right before the race matters less than people think.</li>
+    </ul>
+    <h3 style="margin:16px 0 6px;font-size:16px">Fueling</h3>
+    <ul>
+      ${fuelLong}
+      <li><b>Race morning:</b> a familiar, carb-based breakfast 2–4 hours before the start, low in fat and fiber (toast or a bagel with jam, oatmeal, a banana). Sip water, and stop drinking a lot in the last hour.</li>
+      ${inRace}
+    </ul>
+    <h3 style="margin:16px 0 6px;font-size:16px">Pacing</h3>
+    ${pacing}
+    <ul>
+      <li>Start a little slower than target for the first ${u === 'km' ? 'km or two' : 'mile or two'}. Adrenaline makes fast feel easy, and early time "in the bank" costs more later.</li>
+      <li>Aim for even effort, and finish strong if you have it. Uphills cost time; let them, and get it back on the way down.</li>
+      <li>For splits that account for hills, try a course-specific calculator like <a href="https://runnersconnect.net/race-guides/" target="_blank" rel="noopener">RunnersConnect race guides</a> or the pace calculator at <a href="https://www.mcmillanrunning.com/" target="_blank" rel="noopener">McMillan Running</a>, or your watch's pace-strategy feature (like Garmin PacePro).</li>
+    </ul>
+    <h3 style="margin:16px 0 6px;font-size:16px">What to wear</h3>
+    <ul>
+      <li>You warm up fast once you're moving. A common rule is to dress for about 15°F (8°C) warmer than the forecast.</li>
+      <li>Two approaches work, depending on you: start cold and use the first miles to warm up, or wear old layers (a sweatshirt, cheap gloves, a hat) you're happy to toss. Many races donate discarded clothes.</li>
+      <li>Hands and head are easy to adjust: gloves can come off and go back on, and a hat can be stashed or ditched.</li>
+    </ul>
+    <h3 style="margin:16px 0 6px;font-size:16px">Race day</h3>
+    <ul>
+      <li>Lay out everything the night before: bib pinned, watch charged, gels packed.</li>
+      <li>Arrive with time for the bathroom line, then warm up: ${warm}.</li>
+      <li>Find your corral or pace group and start where you belong, not at the front.</li>
+    </ul>
+    <p class="flag" style="margin-top:12px"><b>You can do hard things.</b> You showed up week after week to get here, and race day is the fun part. Whatever the clock says, you're taking on a real challenge, and we're proud of you.</p>
+  </details>`;
+}
+// =====================================================================
+// AFTER THE RACE: result -> new benchmark, recovery, and a varied next step
+// =====================================================================
+const RECOVERY = {'5K': [1, '3–5 easy days before anything hard.'], '10K': [1, 'About a week of easy running before anything hard.'],
+  'Half': [2, '1–2 weeks of easy running before hard workouts or long runs.'], 'Full': [4, '3–4 weeks of easy, shorter running before hard workouts. Feeling good after a week is normal, but muscles and tendons take longer to fully recover.']};
+const NEXT = {
+  'Full': [['5K', 'Speed season: a 5K plan', 'Shorter, faster racing is a great change after a marathon.'], ['10K', 'A 10K plan', 'Builds speed while you keep your endurance.'], ['Half', 'A half marathon plan', 'Keeps distance in your legs without another full build.'], ['Full', 'Another marathon', '']],
+  'Half': [['5K', 'A 5K plan', 'Sharpen up with some speed.'], ['10K', 'A 10K plan', 'A good bridge between speed and endurance.'], ['Full', 'A marathon plan', 'Ready for the next big challenge.'], ['Half', 'Another half marathon', '']],
+  '10K': [['5K', 'A 5K plan', 'Turn your endurance into speed.'], ['Half', 'A half marathon plan', 'Stretch your endurance.'], ['10K', 'Another 10K', '']],
+  '5K': [['10K', 'A 10K plan', 'Build on your speed with more endurance.'], ['Half', 'A half marathon plan', 'A bigger challenge.'], ['5K', 'Another 5K', '']]
+};
+const RACE_NAME = {'5K':'5K', '10K':'10K', 'Half':'half marathon', 'Full':'marathon'};
+function afterRaceHTML(d){
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  if (d.date > today) return '';
+  const r = A.raceResult, D = A.distance, rec = RECOVERY[D];
+  if (!r) return `<div class="dayedit" data-raceform><p style="margin:0 0 8px"><b>How did it go?</b> Enter your finish time. It becomes your new benchmark for whatever comes next.</p>
+    <label class="field">Finish time (h:mm:ss) <input data-race="time" inputmode="numeric" placeholder="${D === 'Full' ? 'e.g. 3:58:20' : D === 'Half' ? 'e.g. 1:52:10' : 'e.g. 27:45'}"></label>
+    <p class="err" data-raceerr style="margin:4px 0"></p>
+    <div class="planbtns"><button data-racesave>Save my result</button></div></div>`;
+  const next = NEXT[D].map(([dist, label, why]) => {
+    const same = dist === D;
+    const warn = same && D === 'Full' ? 'Two marathon builds back to back raise the risk of injury and burnout. Most runners do one or two a year, with something different in between.' : same ? 'Fine to do again. Mixing in a different distance now and then keeps training fresh.' : '';
+    return `<button type="button" class="choice" data-nextplan="${dist}"><b>${label}</b>${why || warn ? `<span>${esc(why || warn)}</span>` : ''}</button>`;
+  }).join('');
+  return `<div class="dayedit">
+    <p style="margin:0 0 6px"><b>${RACE_NAME[D][0].toUpperCase() + RACE_NAME[D].slice(1)} finished in ${fmtSecs(r.secs)}.</b> That's a real accomplishment. Congratulations!</p>
+    <p style="margin:0 0 6px"><b>Recover first:</b> ${rec[1]} Then ease back toward your usual volume over a couple of weeks.</p>
+    <p class="quiet" style="margin:0 0 10px">Training works best in seasons. A few easy weeks, a different sport, or a new distance helps you come back fresher and keeps it fun.</p>
+    <p style="margin:0 0 6px"><b>What's next?</b> Pick one and you'll review the answers before anything changes. Your new plan starts after your recovery.</p>
+    <div class="choices">${next}</div>
+    <div class="planbtns" style="margin-top:8px"><button data-raceundo>Change my result</button></div></div>`;
+}
+function afterRaceClick(e){
+  const sv = e.target.closest('[data-racesave]'), nx = e.target.closest('[data-nextplan]'), un = e.target.closest('[data-raceundo]');
+  if (sv){
+    const f = sv.closest('[data-raceform]'), t = parseHMS(f.querySelector('[data-race="time"]').value);
+    if (!t || t < 600) { f.querySelector('[data-raceerr]').textContent = 'Enter your finish time, like 27:45 or 3:58:20.'; return; }
+    A.raceResult = {secs: t, date: A.raceDate}; reEdit(sv.closest('details.day')); return;
+  }
+  if (un){ A.raceResult = null; reEdit(un.closest('details.day')); return; }
+  if (nx){
+    autoBackup();   // the finished plan stays recoverable on this device
+    const D = A.distance, r = A.raceResult, peak = Math.max(...P.weeks.filter(w => w.phase !== 'taper').map(w => w.total));
+    const start = addDays(parseDate(A.raceDate), RECOVERY[D][0] * 7);
+    const mon = addDays(start, (8 - start.getDay()) % 7);   // the Monday after recovery
+    const vol = peak * 0.7;
+    const h = Math.floor(r.secs / 3600), m = Math.floor(r.secs % 3600 / 60), sec = Math.round(r.secs % 60);
+    Object.assign(A, {
+      distance: nx.dataset.nextplan, startDate: iso(mon), timeline: 'weeks', weeks: nx.dataset.nextplan === 'Full' ? 18 : nx.dataset.nextplan === 'Half' ? 14 : 10, raceDate: '',
+      benchKind: 'race', benchDist: D, benchTime: {h: h ? String(h) : '', m: String(m), s: String(sec).padStart(2, '0')}, goalTime: {h:'', m:'', s:''},
+      volume: String(Math.round((A.units === 'km' ? vol * KM : vol) * 2) / 2), experience: A.experience === 'new' ? 'some' : A.experience,
+      checkins: [], swaps: [], eased: [], raceResult: null, rwRepeats: [], canRun: '', built: false, ackTough: false, glossaryOk: true
+    });
+    save(); showQuiz();
+    $('err').textContent = `Your ${RACE_NAME[D]} result is your new benchmark, and the plan starts ${fmtDayShort(iso(mon))}, after your recovery. Check the answers, add a race date or goal if you have one, then build it. Your finished plan is backed up on this device.`;
+  }
 }
 function checkinHTML(d){
   const k = iso(d.date), got = (A.checkins || []).find(c => c.date === k);
@@ -1619,6 +1760,7 @@ function checkinClick(e){
   reEdit(sv.closest('details.day'));
 }
 function dayEditHTML(d, i){
+  if (d.role === 'RACE') return '';
   const W = P.weeks[wk];
   const k = iso(d.date);
   const edited = (A.swaps || []).some(p => p.includes(k)) || (A.eased || []).includes(k);
@@ -2957,13 +3099,140 @@ function exportXLSX(){
     `${planName()}.xlsx`.replace(/\s+/g, '-'));
 }
 
-if (A.built) showPlan(); else render();
+// =====================================================================
+// KEEP YOUR PLAN: backups, restore, share link, and update checks.
+// Everything stays on the device; backups never include the Intervals.icu API key.
+// =====================================================================
+const AUTO_KEY = 'tbb-backup-auto';
+function backupData(){
+  const icu = icuLoad();
+  return {app: 'training-block-builder', kind: 'backup', version: APP_VERSION, savedAt: new Date().toISOString(),
+    answers: A, icu: {athlete: icu.athlete || '', sent: icu.sent || []}};
+}
+function saveBackupFile(){
+  const stamp = iso(new Date());
+  download(new Blob([JSON.stringify(backupData(), null, 1)], {type: 'application/json'}), `training-plan-backup-${stamp}.json`);
+  A.lastBackup = stamp; save();
+}
+function autoBackup(){ try { localStorage.setItem(AUTO_KEY, JSON.stringify(backupData())); } catch(e){} }
+function applyBackup(b){
+  if (!b || b.app !== 'training-block-builder' || !b.answers || typeof b.answers !== 'object') return 'That file isn\'t a Training Block Builder backup.';
+  A = Object.assign({}, DEFAULTS, b.answers); save();
+  if (b.icu){ const cur = icuLoad(); icuSave(Object.assign({}, cur, {athlete: cur.athlete || b.icu.athlete || '', sent: [...new Set([...(cur.sent || []), ...(b.icu.sent || [])])]})); ICU = icuLoad(); }
+  return '';
+}
+function pickRestore(){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    let b; try { b = JSON.parse(await f.text()); } catch(e){ b = null; }
+    const err = applyBackup(b);
+    if (err){ keepMsg(err); return; }
+    if (A.built) showPlan(); else { idx = 0; render(); }
+    keepMsg(`Restored your plan from ${b.savedAt ? new Date(b.savedAt).toLocaleDateString() : 'your backup'}.`);
+  };
+  inp.click();
+}
+function keepMsg(t){
+  const el = $('keepmsg') || $('err'); if (el){ el.hidden = false; el.textContent = t; }
+}
+// Share link: the plan setup only (race, dates, days, strength). Fitness, goal time, heart rate, check-ins and day changes stay private.
+const SHARE_FIELDS = ['distance', 'experience', 'units', 'timeline', 'raceDate', 'weeks', 'startDate', 'days', 'longDay', 'qualityDay', 'strength', 'equipment', 'heat'];
+function shareLink(){
+  const o = {}; SHARE_FIELDS.forEach(k => { if (A[k] !== undefined && A[k] !== '') o[k] = A[k]; });
+  const enc = btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return location.origin + location.pathname + '#setup=' + enc;
+}
+async function copyShare(){
+  const url = shareLink();
+  try {
+    if (navigator.share && matchMedia('(pointer: coarse)').matches){ await navigator.share({title: 'Training plan setup', url}); return; }
+    await navigator.clipboard.writeText(url); keepMsg('Link copied. Whoever opens it gets your plan setup and fills in their own fitness.');
+  } catch(e){ if (!e || e.name !== 'AbortError') keepMsg(url); }
+}
+function readSharedSetup(){
+  const m = location.hash.match(/^#setup=([\w-]+)/); if (!m) return null;
+  try {
+    const b = m[1].replace(/-/g, '+').replace(/_/g, '/');
+    const o = JSON.parse(decodeURIComponent(escape(atob(b + '==='.slice((b.length + 3) % 4)))));
+    const out = {}; SHARE_FIELDS.forEach(k => { if (o[k] !== undefined) out[k] = o[k]; });
+    return out;
+  } catch(e){ return null; }
+}
+function openSharedSetup(o, confirmed){
+  if (A.built && !confirmed){
+    $('plan').hidden = true; $('tabbar').hidden = true; $('quiz').hidden = false; $('quizbar').hidden = true;
+    $('step').textContent = ''; $('progress').innerHTML = '';
+    $('screen').innerHTML = `<h1>Open a shared plan setup?</h1>
+      <p class="lead">Someone sent you a ${esc(o.distance || '')} plan setup. Opening it replaces the plan on this device. Your current plan is backed up here first, and you can save a backup file too.</p>
+      <div class="planbtns"><button id="shareok">Open the shared setup</button><button id="shareno">Keep my plan</button></div>
+      <div class="planbtns" style="margin-top:8px"><button id="sharebk">Save a backup file first</button></div>`;
+    $('shareok').onclick = () => openSharedSetup(o, true);
+    $('shareno').onclick = () => { history.replaceState(null, '', location.pathname); showPlan(); };
+    $('sharebk').onclick = saveBackupFile;
+    return;
+  }
+  history.replaceState(null, '', location.pathname);
+  if (A.built){ autoBackup(); }   // keep the current plan recoverable
+  A = Object.assign({}, DEFAULTS, o, {built: false}); save();
+  $('plan').hidden = true; $('tabbar').hidden = true; $('quiz').hidden = false; $('quizbar').hidden = false;
+  idx = 0; render();
+  $('err').textContent = 'Someone shared a plan setup with you. Check each answer and add your own fitness details.' + (localStorage.getItem(AUTO_KEY) ? ' Your previous plan was backed up on this device.' : '');
+}
+function standalone(){ return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+function keepCard(){
+  return `<div class="card"><h3>Keep your plan safe</h3>
+    <p class="sub">Your plan lives only in this browser. Save a backup now and then, especially before switching phones.</p>
+    <div class="planbtns" style="margin-top:8px"><button id="kbackup">Save a backup</button><button id="krestore">Restore a backup</button></div>
+    ${P && !P.custom ? `<div class="planbtns" style="margin-top:8px"><button id="kshare">Share this plan setup</button></div>
+      <p class="quiet" style="margin:6px 0 0">Sends a link with your race, dates, days, and strength choices. Your fitness, goal time, heart rate, and check-ins stay private.</p>` : ''}
+    ${!standalone() ? `<p class="flag" style="margin-top:10px"><b>Tip:</b> add this app to your Home Screen. Browsers can clear a website's saved data after a while without a visit; Home Screen apps keep it.</p>` : ''}
+    <p class="quiet" style="margin:8px 0 0">${A.lastBackup ? `Last backup: ${fmtDayShort(A.lastBackup)}.` : 'No backup saved yet.'} Backups don't include your Intervals.icu API key.</p>
+    <p id="keepmsg" class="flag" hidden></p></div>`;
+}
+// Update check: compare the running version with the published one; back up first, then refresh
+let updateShown = false;
+async function checkForUpdate(){
+  if (updateShown || !navigator.onLine) return;
+  try {
+    const res = await fetch(location.pathname + '?v=' + Date.now(), {cache: 'no-store'});
+    const m = (await res.text()).match(/const APP_VERSION = '([^']+)'/);
+    if (m && m[1] !== APP_VERSION) showUpdateBar(m[1]);
+  } catch(e){}
+}
+function showUpdateBar(v){
+  updateShown = true;
+  const bar = document.createElement('div'); bar.className = 'updatebar'; bar.setAttribute('role', 'status');
+  bar.innerHTML = `<span><b>A new version is ready</b> (${esc(v)}). Your plan is backed up on this device first, then the app refreshes.</span><button type="button">Update now</button>`;
+  bar.querySelector('button').onclick = () => { autoBackup(); location.reload(); };
+  document.body.appendChild(bar);
+}
+// After an update: if the saved plan didn't survive, put the automatic backup back
+(function recoverAfterUpdate(){
+  try {
+    const raw = localStorage.getItem(KEY), auto = JSON.parse(localStorage.getItem(AUTO_KEY) || 'null');
+    let ok = true; try { ok = !!JSON.parse(raw); } catch(e){ ok = false; }
+    if ((!raw || !ok) && auto && auto.answers && auto.answers.built){ applyBackup(auto); }
+  } catch(e){}
+})();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
+document.addEventListener('click', e => {
+  if (e.target.id === 'kbackup') saveBackupFile();
+  else if (e.target.id === 'krestore') pickRestore();
+  else if (e.target.id === 'kshare') copyShare();
+});
+// Ask the browser to keep this site's data (helps on browsers that clear unused sites)
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+const SHARED = readSharedSetup();
+if (SHARED) openSharedSetup(SHARED); else if (A.built) showPlan(); else render();
+setTimeout(checkForUpdate, 4000);
 
 if ('serviceWorker' in navigator) {
-  // When a new version takes over, reload once so the page matches it
+  // When a new version takes over, offer it (the banner backs up first)
   const hadController = !!navigator.serviceWorker.controller;   // first visit: nothing to refresh
   let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded){ reloaded = true; location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded){ reloaded = true; checkForUpdate(); } });   // offer the update instead of reloading mid-use
   window.addEventListener('load', () => navigator.serviceWorker.register("bb-sw.js").catch(() => {}));
 }
 </script>

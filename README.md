@@ -1,20 +1,18 @@
 # Training Block Builder
 
-Build a run training plan, or upload your own, and keep it on your phone. No account, no server, and it works offline.
-
 **Open it:** https://zbtmaniac.github.io/training-block-builder/
 
-## What it does
+## Why this exists
 
-- **Builds a run plan for you.** Answer seven quick questions (goal race, experience, recent volume, timeline, current fitness, run days, strength) and get a week-by-week plan for a 5K, 10K, half or marathon, with real workouts and training paces or heart-rate targets.
-- **Starts from zero.** Can't run 30 minutes yet? It begins with a run-walk phase and explains running terms in plain words.
-- **Adds strength training** matched to your equipment (bodyweight, dumbbells/kettlebells, or barbell), placed around your hard runs and long run.
-- **Follows your own plan.** Upload the template, any spreadsheet (.xlsx or .csv), or a plan written as a table in a document (.docx, or a Google Doc downloaded as Markdown). Run, bike, swim, brick and strength all work.
-- **Helps when life happens.** Tell it you missed a few days, a week, or more and it tells you what to keep, what to skip, and can push your plan back.
-- **Flags, doesn't forbid.** If a goal looks like a stretch, a timeline is short, or a week is crowded, it says so and suggests fixes. You always get the plan you choose.
-- **Goes where you need it:** add sessions to your calendar, save a PDF, or download an Excel file you can edit and upload again.
-- **Gets workouts onto your watch.** Download structured `.fit` workouts (Garmin, Coros, Intervals.icu) or `.zwo` files (TrainingPeaks, Zwift), or send your plan straight to your Intervals.icu calendar with your own API key, which Intervals.icu can then sync to Garmin.
-- **Plans for heat.** Warm race? It adds heat-adaptation work and race-day guidance.
+Starting to train shouldn't take a coach, a subscription, or a weekend of research. Training Block Builder turns a few answers into a running plan you can start today, explains the reasons behind it in plain words, and gets out of your way. The goal is simple: help people get moving, with less decision fatigue and more enjoyment of getting fitter.
+
+It's built on a few principles:
+
+- **Free.** No subscription and no paywall.
+- **Private.** No account. Your answers and plans stay on your device.
+- **Your plan, your call.** It flags common training mistakes and suggests fixes, but it never refuses to build the plan you ask for.
+- **Fewer decisions.** Sensible defaults, and a short "why" wherever you have to choose.
+- **Open about how it works.** Plans come from published coaching methods, and every rule is written down in [RULES.md](RULES.md).
 
 ## Put it on your phone
 
@@ -27,25 +25,38 @@ Build a run training plan, or upload your own, and keep it on your phone. No acc
 
 Once it's opened once, it works without a connection.
 
-<details>
-<summary><b>How plans are built</b> (summary)</summary>
+## What it does
 
-These are the main rules. The full rules, with the plans and research they come from, are in [RULES.md](RULES.md).
+**Builds your plan**
 
-- **New runners** start with a run-walk phase (Couch to 5K style) until they can run 30 minutes without stopping, with plain-language workouts and a short guide to running words.
-- **Phases:** base → build → peak → taper. Base runs longer when your current volume is far below what the plan needs.
-- **Volume:** builds in steps (hold a level for a few weeks, then step up about 10–15%), with cutback weeks. Short timelines step faster, up to about 20%, and get flagged.
-- **Volume follows you, not the race.** A 5K plan for an experienced runner can have as much running as a half marathon plan. The race changes the workouts, not the mileage.
-- **Long runs** are capped at about 2.5 hours, or 3 hours for a couple of marathon dress rehearsals when there's time to build to it. If a long run would be over about 40% of your week, the plan says so.
-- **Single runs** are capped at about 70 minutes; extra volume goes into a midweek medium-long run on 5–6 day plans.
-- **Workouts:** hard days are hard, easy days are truly easy. Tempo days use float sets by default; race-specific work comes in the peak phase.
-- **Paces** come from a recent race or time trial. Goal times are checked against your projected fitness and rated on track, ambitious, or big stretch.
-- **Strength:** heavy, low-rep lifting plus jumps, on hard days, never the day before your long run. Any lifting is better than none.
-- **Adjust how it builds:** experienced runners can let weekday runs go to 80–90 minutes (spread over easy days) and pick a build style (Steady, Daniels, or Aggressive). New runners don't see these options.
-- **Single-run rule:** no long run more than about 10% past your longest of the past month, at every level.
-- **Expert mode** turns off the safety caps for people who know what they're doing.
+- Answer seven quick questions and get a week-by-week plan for a 5K, 10K, half or marathon, with real workouts and training paces or heart-rate targets.
+- New to running? If you can't run 30 minutes yet, it starts with a run-walk phase and explains running terms in plain words.
+- Adds strength training matched to your equipment (bodyweight, dumbbells/kettlebells, or barbell), placed around your hard runs and long run.
+- Plans for heat: a warm race gets heat-adaptation work and race-day guidance.
 
-</details>
+**Fits your life**
+
+- Move a session to another day in the week, or swap a hard workout for an easy run when the day goes sideways.
+- Missed a few days, a week or more? It tells you what to keep, what to skip, and can push your plan back.
+- Follow your own plan instead: upload the template, any spreadsheet (.xlsx or .csv), or a plan written as a table in a document (.docx, or a Google Doc downloaded as Markdown). Run, bike, swim, brick and strength all work.
+
+**Goes where you train**
+
+- Add sessions to your calendar, save a PDF, or download an Excel file you can edit and upload again.
+- Download structured workouts for your watch (`.fit` for Garmin, Coros and Intervals.icu; `.zwo` for TrainingPeaks and Zwift), or send your plan straight to your Intervals.icu calendar.
+
+## How plans are built
+
+The short version, in the order a plan comes together. The full rules, a glossary, and the plans and research they come from are in [RULES.md](RULES.md).
+
+1. **What you tell it:** goal race, experience, recent weekly volume, timeline, current fitness, run days and strength.
+2. **Where you're starting.** Experience sets the starting point and the options. New runners who can't run 30 minutes yet start with run-walk (Couch to 5K style), get plain-language workouts and ease into strength. Runners who have trained before can lengthen weekday runs; runners who train regularly can also pick a build style.
+3. **What you're training for.** Paces come from a recent race or time trial, and your goal time is rated on track, ambitious or big stretch. The race distance changes the workouts, not the mileage: volume follows you.
+4. **How much time you have.** Plans run base → build → peak → taper. Volume holds for a few weeks, then steps up (usually 10–20%), with cutback weeks. Short timelines step faster and say so. If the usual peak won't fit your days and pace, the plan peaks at what fits and tells you why.
+5. **What fills each week.** Hard days are hard and easy days are truly easy. Long runs top out around 2.5 hours (3 hours for a couple of marathon dress rehearsals). At every level, no long run jumps more than about 10% past your longest of the past month, and no weekday run is as long as the long run. Strength goes on hard days, never the day before the long run.
+6. **When life changes the plan.** Moves, easier days and missed training are handled without making up lost work.
+
+Expert mode turns off the safety caps for people who know what they're doing.
 
 ## Getting workouts onto your watch
 

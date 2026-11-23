@@ -198,7 +198,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.12.0';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.12.1';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -774,7 +774,7 @@ function fmtPace(sPerMi){
 let Z = null;   // set per plan build
 // Heart-rate targets as % of threshold HR. Short, fast reps have none: HR lags behind the effort.
 const HR_PCT = {E:[0, 0.89], steady:[0.87, 0.91], MP:[0.89, 0.93], HM:[0.93, 0.97], T:[0.95, 1.0], '10K':[0.99, 1.02], '5K':null, R:null};
-function lthrVal(){ const ck = lastCheck(c => c.lthr && !c.hot); if (ck) return ck.lthr; const v = +A.lthr; return A.lthr !== '' && v > 0 ? v : 0; }
+function lthrVal(){ const ck = lastCheck(c => c.lthr); if (ck) return ck.lthr; const v = +A.lthr; return A.lthr !== '' && v > 0 ? v : 0; }
 function hrText(key){
   const l = lthrVal(); if (!l) return '';
   const k = key === 'race' ? {'5K':'5K', '10K':'10K', 'Half':'HM', 'Full':'MP'}[A.distance] : key;
@@ -822,7 +822,7 @@ function workoutSteps(d, phase, f, k, pace){
       'Run 30 minutes as hard as you can hold evenly, on your own (not with a group). Press lap at 10 minutes.',
       'Afterward, note the distance you covered and your average heart rate for the last 20 minutes',
       'Cool down: 10 min easy',
-      'Pick a cool part of the day if you can. Heat pushes heart rate up and pace down, which skews the result.'].concat(
+      'Test in conditions like the ones you train in. Heat, cold, and humidity all shift heart rate and pace.'].concat(
       D === 'Half' || D === 'Full' ? [`Or race a ${D === 'Full' ? '10K or half marathon' : '10K'} this week instead and enter that result. A 10K or longer race works for threshold HR too; a 5K runs high.`] : ['Or race a 5K or 10K this week instead and enter that time.']);
     case 'TT': return [WU, `Run ${D === 'Full' ? 'a hard 10K' : D === 'Half' ? 'a hard 10K' : 'your ' + D} as a time trial, or at goal effort`, 'Cool down: 10 min easy'];
     case 'RACE': return ['Start a touch slower than goal pace for the first mile', 'Settle in ' + at('race')].concat(D === 'Full' || D === 'Half' ? ['Fuel the way you practiced: carbs every 30–45 min'] : ['Hold back for the first half, then race the second']);
@@ -1367,7 +1367,7 @@ function noteList(){
     return out;
   }
   if (A.expert) return ['Expert mode is on: volume, distance, and time safety checks are off.'];
-  if (N.checkins && N.checkins.length) out.push(`Check-in time trials in week${N.checkins.length > 1 ? 's' : ''} ${N.checkins.join(' and ')} keep your paces honest. Enter the result on that day and the plan updates your paces${lthrVal() || A.effort === 'hr' ? ', heart-rate zones,' : ''} and goal check. Fitness changes, and so does the weather: a test in summer heat makes threshold HR look higher than it is in cool weather.`);
+  if (N.checkins && N.checkins.length) out.push(`Check-in time trials in week${N.checkins.length > 1 ? 's' : ''} ${N.checkins.join(' and ')} keep your paces honest. Enter the result on that day and the plan updates your paces${lthrVal() || A.effort === 'hr' ? ', heart-rate zones,' : ''} and goal check. A result reflects your fitness and the conditions on test day. If the season changes, or workouts start to feel too hard or too easy, retest.`);
   if (N.rwOnly) out.push(`This plan gets you running: run-walk sessions three times a week that build ${N.rwDone ? 'to 30 minutes of running without stopping' : 'as far as your timeline allows, faster than ideal'}. ${A.timeline === 'race' ? 'You can absolutely race with walk breaks, and lots of people do.' : ''}`);
   if (N.rwThen) out.push(`Weeks 1–${N.rwThen.rwWeeks} get you running 30 minutes without stopping. From week ${N.rwThen.regWeek} it becomes a regular ${A.distance} plan, so read Running words before then.`);
   if (needsRunWalk()) out.push('Run-walk weeks have three runs with a rest day between each; other days are rest or an optional walk while your legs adapt.' + (+A.strength ? ' Strength starts with one light session a week for the first month.' : ''));
@@ -1562,7 +1562,7 @@ function applyEdits(plan){
 }
 function checkinHTML(d){
   const k = iso(d.date), got = (A.checkins || []).find(c => c.date === k);
-  if (got) return `<div class="dayedit"><p style="margin:0 0 6px"><b>Your result:</b> ${esc(got.label)}${got.lthr ? `, threshold HR ${got.lthr} bpm${got.hot ? ' (hot day: HR not used)' : ''}` : ''}.</p>
+  if (got) return `<div class="dayedit"><p style="margin:0 0 6px"><b>Your result:</b> ${esc(got.label)}${got.lthr ? `, threshold HR ${got.lthr} bpm` : ''}.</p>
     <p class="quiet" style="margin:0 0 8px">${esc(got.effect || '')}</p>
     <div class="planbtns"><button data-ckdel="${k}">Remove this result</button></div></div>`;
   const u = A.units, D = A.distance;
@@ -1576,7 +1576,6 @@ function checkinHTML(d){
          <label class="field">Time (h:mm:ss) <input data-ck="time" inputmode="numeric" placeholder="e.g. 47:30"></label>`
       : `<label class="field">Distance covered (${u}) <input data-ck="tt" type="number" step="0.01" inputmode="decimal" placeholder="${u === 'km' ? 'e.g. 6.8' : 'e.g. 4.2'}"></label>`}
     <label class="field">Average HR, last 20 min <input data-ck="hr" type="number" inputmode="numeric" placeholder="optional"></label>
-    <label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:15px"><input type="checkbox" data-ck="hot"> It was hot (above about 75°F / 24°C)</label>
     <p class="err" data-ckerr style="margin:4px 0"></p>
     <div class="planbtns"><button data-cksave="${k}">Save and update my plan</button></div></div>`;
 }
@@ -1599,20 +1598,19 @@ function checkinClick(e){
     if (!(mi >= 2 && mi <= 7.5)) return err(`Enter the distance you covered in 30 minutes, in ${A.units}.`);
     t5k = 1800 * Math.pow(3.107 / mi, 1.06); label = `${q('tt').value} ${A.units} in 30 minutes`; long = true;
   }
-  const hr = +q('hr').value, hot = q('hot').checked;
+  const hr = +q('hr').value;
   if (q('hr').value && !(hr >= 120 && hr <= 210)) return err('Average HR is usually between 120 and 210 bpm. Check it, or leave it blank.');
   const before = paceZones(), beforeG = P.goal;
-  const ck = {date: f.dataset.ckform, t5k, label, hot, ...(hr && long ? {lthr: Math.round(hr)} : {})};
+  const ck = {date: f.dataset.ckform, t5k, label, ...(hr && long ? {lthr: Math.round(hr)} : {})};
   A.checkins = (A.checkins || []).filter(c => c.date !== ck.date).concat([ck]);
   const after = paceZones(), afterG = goalCheck(planWeeks());
   const bits = [];
   if (before && after) bits.push(`Easy pace ${fmtPace(before.E)} → ${fmtPace(after.E)}, threshold ${fmtPace(before.T)} → ${fmtPace(after.T)}.`);
   else if (after) bits.push(`Training paces are set from this result: easy ${fmtPace(after.E)}, threshold ${fmtPace(after.T)}.`);
-  if (hr && !long) bits.push('A 5K runs too hot for threshold HR, so your HR zones stay as they were.');
-  if (hr && long && hot) bits.push('Hot-day HR runs high, so your HR zones stay as they were. Retest when it cools down.');
-  else if (hr && long) bits.push(`Threshold HR set to ${Math.round(hr)} bpm.`);
+  if (hr && !long) bits.push('A 5K runs too high for threshold HR, so your HR zones stay as they were.');
+  if (hr && long) bits.push(`Threshold HR set to ${Math.round(hr)} bpm.`);
   if (afterG) bits.push(`Goal check: ${GOAL_LABEL[afterG.tier]}${beforeG && beforeG.tier !== afterG.tier ? ` (was ${GOAL_LABEL[beforeG.tier]})` : ''}.`);
-  if (hot) bits.push('Paces from a hot test run slow. If workouts start to feel easy, retest on a cooler day.');
+  bits.push('These numbers fit the conditions you tested in. If the weather changes a lot, or workouts start to feel too hard or too easy, retest.');
   ck.effect = bits.join(' ');
   reEdit(sv.closest('details.day'));
 }

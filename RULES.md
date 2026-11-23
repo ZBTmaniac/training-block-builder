@@ -72,6 +72,13 @@ Experience sets how plans start, how fast they build, and how many options you s
 
 The check shows live on the benchmark screen and again on the plan. Big-stretch goals use projected pace for race-pace workouts, so nobody does reps at a pace they can't hold.
 
+### Check-ins
+
+- Plans of 10 weeks or more get a check-in about every 8 weeks, starting around week 6, in place of that week's quality session. They prefer cutback weeks and never fall in the last 3 weeks.
+- The check-in is a 30-minute solo time trial: distance covered sets your paces, and average heart rate over the last 20 minutes sets threshold HR. A tune-up race works too (5K or 10K for any plan; also a half for half and marathon plans). Races of 10K or longer can set threshold HR; a 5K runs too high.
+- Entering a result updates paces, heart-rate zones, and the goal check for the rest of the plan. The goal check then counts only the weeks left. Weekly volume doesn't change.
+- A result reflects your fitness and the conditions on test day. Heat, cold, and humidity all shift heart rate and pace, so a threshold HR set in summer can push you too hard in cool weather, and one set in winter can slow you down too much in the heat. Test in conditions like the ones you train in, and retest when the season changes or workouts start to feel too hard or too easy.
+
 ## 4. How much time do you have?
 
 ### Phases

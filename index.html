@@ -208,7 +208,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.13.1';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.13.2';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -1996,6 +1996,7 @@ const HEAD = {
   details:['details', 'detail', 'description', 'instructions', 'notes', 'note', 'structure'], distance:['distance', 'dist', 'miles', 'mileage', 'km', 'kilometers', 'kilometres', 'mi'],
   duration:['duration', 'time', 'minutes', 'mins', 'min', 'length'], intensity:['intensity', 'effort', 'zone', 'rpe'],
   session:['session', 'session name', 'workout', 'day'], exercise:['exercise', 'lift', 'movement', 'exercise name'],
+  workout:['workout steps', 'intervals.icu', 'intervals.icu steps', 'intervals workout', 'workout text'],
   sets:['sets × reps', 'sets x reps', 'sets/reps', 'sets and reps', 'prescription', 'sets', 'reps', 'scheme'], load:['load', 'weight', '% 1rm', 'percent', 'rpe']
 };
 const normS = v => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -2126,7 +2127,7 @@ function findHeader(rows, need){
 function parseUpload(sheets, fileName){
   const problems = [], warnings = [];
   const names = Object.keys(sheets);
-  const planKeys = ['week','day','sport','type','title','details','distance','duration','intensity'];
+  const planKeys = ['week','day','sport','type','title','details','distance','duration','intensity','workout'];
   const strKeys = ['week','session','exercise','sets','load','details'];
   let planSheet = null, planHead = null, strSheet = null, strHead = null;
   for (const n of names){
@@ -2191,7 +2192,7 @@ function parseUpload(sheets, fileName){
     const details = String(get('details') ?? '').trim();
     const steps = details ? details.split(/\s*\|\s*|\r?\n|;\s+/).filter(Boolean) : [];
     const optional = /^optional\b/i.test(String(get('type') ?? '').trim()) || /^optional\b/i.test(title);
-    sessions.push({row: rn, week, day, sport, type, intensity, title, steps, miles: Math.round(miles * 10) / 10, mins: Math.round(mins), swimDist, ...(optional ? {optional: true} : {})});
+    sessions.push({row: rn, week, day, sport, type, intensity, title, steps, miles: Math.round(miles * 10) / 10, mins: Math.round(mins), swimDist, ...(optional ? {optional: true} : {}), ...(get('workout') ? {workout: String(get('workout')).replace(/\r/g, '').trim()} : {})});
   }
   if (!seenAnything) return {fatal: 'The plan tab has a header row but no sessions under it.'};
   // strength tab
@@ -2506,6 +2507,7 @@ function downloadTemplate(){
     ['Details: separate steps with a | (vertical bar), and each becomes its own line in the app.'],
     ['Distance: a number. The app asks for miles or km when you upload. Swims are yards or meters (you can write "1500 m").'],
     ['Duration: minutes (45), or h:mm (1:30).'],
+    ['Optional Workout steps column: Intervals.icu workout text (like "- 15m Z2 HR", then "5x", "- 3m 95-100% LTHR", "- 90s Z2 HR"), one step per line. Sent to Intervals.icu, it becomes a structured workout with intervals on your watch.'],
     ['Strength tab: list exercises by Week and Session. Name the session in the plan tab\'s Title (e.g. "Strength A") to put it on that day.'],
     ['Strength sessions not placed in the plan tab get placed for you, on hard days and away from your long run.'],
     ['Delete the sample rows before you start. Not medical advice.']];
@@ -2717,6 +2719,7 @@ function icuEvents(weeks){
       const date = iso(d.date) + 'T00:00:00';
       const ev = {category: 'WORKOUT', start_date_local: date, type: ICU_TYPE[it.sport] || 'Run', name: it.title.slice(0, 80),
         description: (it.steps || []).join('\n'), external_id: `tbb-${iso(d.date)}-${i}`};
+      if (it.x && it.x.workout) ev.description = [(it.steps || []).join('\n'), it.x.workout].filter(Boolean).join('\n\n');
       if (it.sport === 'Run' && !it.x && d.struct){ ev.filename = 'workout.fit'; ev.file_contents_base64 = b64(fitWorkout(it.title.slice(0, 31), d.struct)); }
       else if (it.x && it.x.mins) ev.moving_time = it.x.mins * 60;
       evs.push(ev);
@@ -3104,7 +3107,7 @@ function exportXLSX(){
   const unit = A.units;
   const TYPE = {Q:'Quality', T:'Tempo', L:'Long', E:'Easy', R:'Recovery', RACE:'Race', off:'Rest'};
   const INT = {Q:'Hard', T:'Hard', L:'Moderate', RACE:'Hard'};
-  const rows = [['Week', 'Day', 'Sport', 'Type', 'Title', 'Details', 'Distance', 'Duration (min)', 'Intensity', 'Date', 'Phase']];
+  const rows = [['Week', 'Day', 'Sport', 'Type', 'Title', 'Details', 'Distance', 'Duration (min)', 'Intensity', 'Date', 'Phase', 'Workout steps']];
   const strength = [['Week', 'Session', 'Exercise', 'Sets × reps', 'Load', 'Notes']];
   P.weeks.forEach((W, wi) => W.days.forEach(d => {
     const day = DAYS[(d.date.getDay() + 6) % 7], phase = PHASE_NAME[W.phase] || '';
@@ -3121,11 +3124,11 @@ function exportXLSX(){
       const dist = x ? (x.sport === 'Swim' ? x.swimDist : x.miles ? Math.round((unit === 'km' ? x.miles * KM : x.miles) * 10) / 10 : '')
                      : d.miles ? Math.round((unit === 'km' ? d.miles * KM : d.miles) * 2) / 2 : '';
       const mins = x && x.mins ? x.mins : d.rwLevel !== undefined && !it.optional ? rwMinutes(RW_LEVELS[d.rwLevel]) : '';
-      rows.push([wi + 1, day, x ? x.sport : it.sport === 'Other' ? 'Other' : 'Run', x ? x.type : it.optional ? 'Optional' : d.kind === 'RW' ? 'Run-walk' : (TYPE[d.role] || 'Easy'), it.title, (it.steps || []).join(' | '), dist, mins, x ? x.intensity : (INT[d.role] || 'Easy'), iso(d.date), phase]);
+      rows.push([wi + 1, day, x ? x.sport : it.sport === 'Other' ? 'Other' : 'Run', x ? x.type : it.optional ? 'Optional' : d.kind === 'RW' ? 'Run-walk' : (TYPE[d.role] || 'Easy'), it.title, (it.steps || []).join(' | '), dist, mins, x ? x.intensity : (INT[d.role] || 'Easy'), iso(d.date), phase, x && x.workout ? x.workout : '']);
     });
   }));
   const dv = [['B2:B2500', DAYS], ['C2:C2500', SPORTS], ['D2:D2500', TYPES], ['I2:I2500', INTENSITIES]];
-  download(xlsxBlob([{name:'Plan', rows, widths:[7, 8, 10, 10, 26, 70, 10, 14, 11, 12, 10], dv},
+  download(xlsxBlob([{name:'Plan', rows, widths:[7, 8, 10, 10, 26, 70, 10, 14, 11, 12, 10, 40], dv},
                      ...(strength.length > 1 ? [{name:'Strength', rows: strength, widths:[7, 22, 70, 12, 10, 20]}] : [])]),
     `${planName()}.xlsx`.replace(/\s+/g, '-'));
 }

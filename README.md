@@ -40,7 +40,7 @@ Once it's opened once, it works without a connection.
 - Move a session to another day in the week, or swap a hard workout for an easy run when the day goes sideways.
 - Missed a few days, a week, or more? It tells you what to keep, what to skip, and can push your plan back.
 - After the race, enter your time: it becomes your new benchmark, and the app suggests recovery and a different next challenge.
-- Follow your own plan instead: upload the template, any spreadsheet (.xlsx or .csv), or a plan written as a table in a document (.docx, or a Google Doc downloaded as Markdown). Run, bike, swim, brick, and strength all work.
+- Follow your own plan instead: upload the template, any spreadsheet (.xlsx or .csv), or a plan written as a table in a document (.docx, or a Google Doc downloaded as Markdown). Run, bike, swim, brick, and strength all work. Add a Workout steps column in Intervals.icu workout text and those sessions arrive in Intervals.icu (and on your watch) as structured workouts.
 
 **Goes where you train**
 

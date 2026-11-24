@@ -208,7 +208,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.13.3';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.13.4';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -2412,7 +2412,17 @@ function drawUpload(){
     <p class="lead">Fill in the template (one row per session), then upload it here. The file stays on your phone.</p>
     <div class="card"><h3>1. Get the template</h3>
       <p class="sub">An Excel file with dropdowns for day, sport, type, and intensity; a sample plan; and a strength tab.</p>
-      <button type="button" class="choice" data-u="template"><b>Download template</b><span>Opens in Excel, Numbers, or Google Sheets</span></button></div>
+      <button type="button" class="choice" data-u="template"><b>Download template</b><span>Opens in Excel, Numbers, or Google Sheets</span></button>
+      <details style="margin-top:10px"><summary class="quiet" style="cursor:pointer">Already have a plan? Ways to get it in, easiest first</summary>
+        <ol style="margin:8px 0 0;padding-left:20px;font-size:15px">
+          <li style="margin-bottom:8px"><b>Try uploading it as it is.</b> Plans with one row per session, or one row per week with a column for each day, often work without changes. You'll see what was read before anything is saved.</li>
+          <li style="margin-bottom:8px"><b>Rename a few column headers</b> to match the template: Week, Day, Sport, Type, Title, Details, Distance, Duration, Intensity. Similar names like "Description" or "Miles" work too.</li>
+          <li style="margin-bottom:8px"><b>Copy your sessions into the template.</b> Its instructions tab explains each column.</li>
+          <li><b>Ask an AI assistant to convert it.</b> Copy the prompt below, paste it into the assistant you use along with your plan, and upload the spreadsheet it gives back. It can also write structured workout steps for Intervals.icu and your watch. Check the result before you train from it.</li>
+        </ol>
+        <div class="planbtns" style="margin-top:10px"><button type="button" data-u="aiprompt">Copy the conversion prompt</button></div>
+        <p class="quiet" data-aimsg role="status" style="margin:6px 0 0"></p>
+      </details></div>
     <div class="card"><h3>2. Plan settings</h3>
       <label class="field">Week 1 starts <input type="date" data-ufield="start" value="${esc(UPF.start)}"></label>
       <div style="margin-top:10px">${['mi','km'].map(u => `<button type="button" class="choice" data-u="units" data-v="${u}" aria-pressed="${UPF.units === u}" style="display:inline-block;width:48%;margin-right:2%"><b>${u === 'mi' ? 'Miles' : 'Kilometers'}</b></button>`).join('')}</div>
@@ -2441,6 +2451,7 @@ function drawUpload(){
 function uploadClick(e){
   const b = e.target.closest('[data-u]'); if (!b) return;
   if (b.dataset.u === 'template') downloadTemplate();
+  if (b.dataset.u === 'aiprompt'){ copyAIPrompt(); return; }
   if (b.dataset.u === 'range'){ UPF.range = b.dataset.v; if (UPF.file) handleFile(UPF.file); return; }
   if (b.dataset.u === 'paste'){ if (UPF.paste.trim()) handleFile({pasted: true, name: 'Pasted table', text: UPF.paste}); return; }
   if (b.dataset.u === 'units'){ UPF.units = b.dataset.v; if (UPF.file) handleFile(UPF.file); else drawUpload(); }
@@ -2481,6 +2492,43 @@ function importUpload(){
   const d = parseDate(UPF.start); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));   // snap to that week's Monday
   A.mode = 'upload'; A.custom = UP; A.startDate = iso(d); A.units = UPF.units; A.timeline = 'length'; A.built = true;
   save(); uploadMode = false; $('next').disabled = false; showPlan();
+}
+
+// ---------- AI conversion prompt (copied to the clipboard; nothing is sent anywhere by the app) ----------
+const AI_PROMPT = `Convert the training plan I'll paste below into a spreadsheet I can upload to Training Block Builder. Give me an .xlsx file (or CSV if you can't make files).
+
+Plan tab: one row per session, with these columns in this order:
+- Week: 1, 2, 3...
+- Day: Mon, Tue, Wed, Thu, Fri, Sat, or Sun
+- Sport: Run, Bike, Swim, Brick, Strength, Other, or Rest
+- Type: Easy, Long, Tempo, Quality, Recovery, Race, or Rest. Start the Type or Title with "Optional" for optional sessions.
+- Title: a short name, like "Tempo run" or "Long ride"
+- Details: the full instructions, with steps separated by " | "
+- Distance: a number (state miles or km in the header, like "Distance (mi)")
+- Duration: minutes, or h:mm
+- Intensity: Easy, Moderate, or Hard
+- Workout steps (runs and rides with structure only): Intervals.icu workout text, one step per line. Examples:
+  - 15m Z2 HR
+  (blank line)
+  5x
+  - 3m 95-100% LTHR
+  - 90s Z2 HR
+  (blank line)
+  - 10m Z2 HR
+  Use "m" for minutes, "s" for seconds, and "mi" or "km" for distance. Runs use heart rate (Z2 HR, or a % of LTHR); rides use % of FTP (like 56-75% for easy, 95-100% for threshold). Leave one blank line before and after each repeat block, and don't nest repeats.
+
+Two sessions on one day get two rows. Rest days can be a single Rest row.
+
+If there's strength training, add a second tab named Strength with columns: Week, Session (matching the strength session's Title in the Plan tab), Exercise, Sets × reps, Load, Notes.
+
+If a range is given (like 4–6 miles), keep the middle value in Distance and the range in Details. Don't invent sessions; if something is unclear, keep the original wording in Details and tell me what you weren't sure about.
+
+My plan:
+`;
+async function copyAIPrompt(){
+  const msg = document.querySelector('[data-aimsg]');
+  try { await navigator.clipboard.writeText(AI_PROMPT); if (msg) msg.textContent = 'Copied. Paste it into your AI assistant, then paste or attach your plan after it.'; }
+  catch(e){ if (msg) msg.textContent = 'Copying was blocked, so here it is to select and copy:'; if (msg) msg.insertAdjacentHTML('afterend', `<textarea readonly style="width:100%;height:220px;margin-top:6px">${esc(AI_PROMPT)}</textarea>`); }
 }
 
 // ---------- template ----------

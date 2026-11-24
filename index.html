@@ -208,7 +208,7 @@ details.day summary::-webkit-details-marker{display:none}
 </div></nav>
 
 <script>
-const APP_VERSION = '0.13.2';   // shown in the plan view; bump with each release
+const APP_VERSION = '0.13.3';   // shown in the plan view; bump with each release
 // ---------- state ----------
 const KEY = 'tbb-answers-v1';
 const DEFAULTS = {
@@ -234,7 +234,7 @@ function save(){ try { localStorage.setItem(KEY, JSON.stringify(A)); } catch(e){
 // ---------- helpers ----------
 function nextMonday(){
   const d = new Date(); d.setHours(0,0,0,0);
-  d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));
+  d.setDate(d.getDate() + (8 - d.getDay()) % 7);   // today if it's Monday, else the coming Monday
   return iso(d);
 }
 function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -539,7 +539,9 @@ $('screen').addEventListener('input', e => {
   $('err').textContent = '';
 });
 $('screen').addEventListener('change', e => {
-  if (uploadMode){ if (e.target.type === 'file') handleFile(e.target.files[0]); return; }
+  if (uploadMode){ if (e.target.type === 'file') handleFile(e.target.files[0]); else uploadInput(e); return; }
+  // iPhone date pickers can report only 'change', so store the value here too
+  if (e.target.dataset.field){ A[e.target.dataset.field] = e.target.value; A.ackTough = false; save(); }
   // redraw for fields that change what the screen shows
   if (['raceDate','startDate','benchDist','lthr'].includes(e.target.dataset.field)) rerender();
 });
